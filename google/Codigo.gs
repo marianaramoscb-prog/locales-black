@@ -65,16 +65,23 @@ function doPost(e) {
 }
 
 /* ---------------- acceso a hojas ---------------- */
+// La planilla, sus hojas y la zona horaria se abren una sola vez por pedido.
+let LIBRO_ = null, TZ_ = null;
+const HOJAS_ = {}, COLS_ = {};
 function libro_() {
+  if (LIBRO_) return LIBRO_;
   const id = PropertiesService.getScriptProperties().getProperty("PLANILLA_ID");
-  return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  LIBRO_ = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  return LIBRO_;
 }
 function hoja_(nombre) {
+  if (HOJAS_[nombre]) return HOJAS_[nombre];
   const h = libro_().getSheetByName(nombre);
   if (!h) throw new Error("Falta la hoja " + nombre + ". ¿Se ejecutó la función instalar?");
+  HOJAS_[nombre] = h;
   return h;
 }
-function tz_() { return libro_().getSpreadsheetTimeZone() || "America/Argentina/Buenos_Aires"; }
+function tz_() { return TZ_ || (TZ_ = libro_().getSpreadsheetTimeZone() || "America/Argentina/Buenos_Aires"); }
 function aISO_(v, conHora) {
   if (!(v instanceof Date)) return v === null || v === undefined ? "" : String(v);
   return Utilities.formatDate(v, tz_(), conHora ? "yyyy-MM-dd'T'HH:mm:ss" : "yyyy-MM-dd");
@@ -86,9 +93,11 @@ function aFecha_(s) {
   return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
 }
 function columnas_(nombre, h) {
+  if (COLS_[nombre]) return COLS_[nombre];
   const titulos = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0].map(String);
   const col = {};
   HOJAS[nombre].forEach(([k, t]) => { const i = titulos.indexOf(t); if (i >= 0) col[k] = i; });
+  COLS_[nombre] = col;
   return col;
 }
 function leer_(nombre) {
@@ -115,19 +124,52 @@ function filaDe_(nombre, o) {
     return v;
   });
 }
-function agregar_(nombre, o) { hoja_(nombre).appendRow(filaDe_(nombre, o)); }
+function agregar_(nombre, o) { hoja_(nombre).appendRow(filaDe_(nombre, o)); borrarCache_(); }
+
+/* Copia rápida de los datos: se guarda unos minutos y se borra con cada cambio */
+const CACHE_PARTES_ = 12;
+function borrarCache_() {
+  try { const c = CacheService.getScriptCache(); const k = ["datos_n"]; for (let i = 0; i < CACHE_PARTES_; i++) k.push("datos_" + i); c.removeAll(k); } catch (e) {}
+}
+function leerCache_() {
+  try {
+    const c = CacheService.getScriptCache(), n = +(c.get("datos_n") || 0);
+    if (!n) return null;
+    const keys = []; for (let i = 0; i < n; i++) keys.push("datos_" + i);
+    const partes = c.getAll(keys); let t = "";
+    for (let i = 0; i < n; i++) { if (partes["datos_" + i] == null) return null; t += partes["datos_" + i]; }
+    return t;
+  } catch (e) { return null; }
+}
+function guardarCache_(t) {
+  try {
+    const tam = 90000, n = Math.ceil(t.length / tam);
+    if (n > CACHE_PARTES_) return;
+    const o = { datos_n: String(n) };
+    for (let i = 0; i < n; i++) o["datos_" + i] = t.slice(i * tam, (i + 1) * tam);
+    CacheService.getScriptCache().putAll(o, 600);
+  } catch (e) {}
+}
+// Si alguien edita la planilla a mano, la app toma el cambio al instante
+function onEdit() { borrarCache_(); }
 function actualizar_(nombre, id, campos) {
   const h = hoja_(nombre), col = columnas_(nombre, h), n = h.getLastRow();
   if (n < 2) throw new Error("No se encontró " + id);
   const ids = h.getRange(2, col.id + 1, n - 1, 1).getValues().map(r => String(r[0]));
   const i = ids.indexOf(String(id));
   if (i < 0) throw new Error("No se encontró " + id + " en " + nombre);
+  // Lee y escribe la fila entera de una vez (mucho más rápido que celda por celda)
+  const ancho = h.getLastColumn();
+  const rango = h.getRange(i + 2, 1, 1, ancho);
+  const fila = rango.getValues()[0];
   Object.keys(campos).forEach(k => {
     if (col[k] === undefined) return;
     let v = campos[k];
     if (FECHAS.includes(k) || FECHAS_HORA.includes(k)) v = aFecha_(v);
-    h.getRange(i + 2, col[k] + 1).setValue(v === null || v === undefined ? "" : v);
+    fila[col[k]] = v === null || v === undefined ? "" : v;
   });
+  rango.setValues([fila]);
+  borrarCache_();
 }
 let QUIEN_ = "";
 function usuario_() {
@@ -194,7 +236,12 @@ function conLock_(fn) {
 function precio_(l) { return (+l.m2 && +l.usdM2) ? (+l.m2) * (+l.usdM2) : ""; }
 
 /* ---------------- lo que llama la página ---------------- */
-function getDatos(token) { sesion_(token); return datos_(); }
+function getDatos(token) {
+  sesion_(token);
+  const c = leerCache_();
+  if (c) return c.replace('"usuario":"__QUIEN__"', '"usuario":' + JSON.stringify(QUIEN_));
+  return datos_();
+}
 function datos_() {
   const locales = leer_("Locales").map(l => Object.assign(l, {
     nave: +l.nave || 0, m2: +l.m2 || 0, usdM2: l.usdM2 === "" ? null : +l.usdM2, orden: +l.orden || 0,
@@ -212,7 +259,9 @@ function datos_() {
   const hist = leer_("Historial").reverse().slice(0, 300);
   const cond = { anticipoPct: 30, cuotas: 36, honorariosPct: 4, certificacionArs: 160000, vigenciaDias: 30 };
   leer_("Config").forEach(c => { if (c.clave in cond) cond[c.clave] = +c.valor; });
-  return JSON.stringify({ locales: locales, presus: presus, reservas: reservas, hist: hist, cond: cond, usuario: QUIEN_ });
+  const t = JSON.stringify({ locales: locales, presus: presus, reservas: reservas, hist: hist, cond: cond, usuario: "__QUIEN__" });
+  guardarCache_(t);
+  return t.replace('"usuario":"__QUIEN__"', '"usuario":' + JSON.stringify(QUIEN_));
 }
 
 function guardarLocal(token, id, campos) {

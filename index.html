@@ -290,12 +290,13 @@ $("#f-login").addEventListener("submit",async e=>{
   catch(err){ $("#l-err").textContent=String(err&&err.message||err).replace(/^Error:\s*/,""); }
   b.disabled=false; b.textContent="Entrar";
 });
-$("#salir").onclick=async()=>{ const t=S.sesion&&S.sesion.token; S.sesion=null; guardarSesion(null); S.cargado=false; S.locales={}; S.presus=[]; S.reservas=[]; S.hist=[]; renderTodo(); mostrarLogin(); if(t){ try{ await llamar("salir",t); }catch(e){} } };
-function aplicar(json){
+$("#salir").onclick=async()=>{ const t=S.sesion&&S.sesion.token; S.sesion=null; guardarSesion(null); try{ localStorage.removeItem("lb-datos"); }catch(e){} S.cargado=false; S.locales={}; S.presus=[]; S.reservas=[]; S.hist=[]; renderTodo(); mostrarLogin(); if(t){ try{ await llamar("salir",t); }catch(e){} } };
+function aplicar(json, deCopia){
   const d = typeof json==="string" ? JSON.parse(json) : json;
+  if(!deCopia){ try{ localStorage.setItem("lb-datos", typeof json==="string"?json:JSON.stringify(json)); }catch(e){} }
   S.locales={}; d.locales.forEach(l=>S.locales[l.id]=l);
   S.presus=d.presus; S.reservas=d.reservas; S.hist=d.hist; S.cond={...S.cond,...d.cond}; S.usuario=d.usuario; S.cargado=true;
-  $("#conn").textContent="Datos al día · "+new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})+(d.usuario?" · "+d.usuario:"");
+  $("#conn").textContent=deCopia?"Mostrando los últimos datos de este dispositivo · actualizando…":"Datos al día · "+new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})+(d.usuario?" · "+d.usuario:"");
   renderTodo();
 }
 async function cargar(){
@@ -305,7 +306,7 @@ async function cargar(){
     if(!S.cargado) $("#tablero").innerHTML=`<div class="vacio">Sin acceso a los datos.</div>`; }
 }
 async function guardar(fn,args,msg,boton){
-  if(boton) boton.disabled=true; document.body.classList.add("cargando");
+  if(boton) boton.disabled=true; document.body.classList.add("cargando"); toast("Guardando…");
   try{ const r=await api(fn,...args); const o=typeof r==="string"?JSON.parse(r):r; aplicar(o.datos||o); if(msg) toast(msg); return o; }
   catch(e){ toast(e&&e.message?e.message:"No se pudo guardar. Probá de nuevo."); if(boton) boton.disabled=false; return null; }
   finally{ document.body.classList.remove("cargando"); }
@@ -510,7 +511,9 @@ function renderHist(){
 }
 
 function renderTodo(){ renderResumen(); renderTablero(); renderPresus(); renderReservas(); renderHist(); }
-renderFiltros(); renderTodo(); cargar();
+renderFiltros();
+if(S.sesion){ try{ const c=localStorage.getItem("lb-datos"); if(c) aplicar(c,true); }catch(e){} }
+renderTodo(); cargar();
 </script>
 </body>
 </html>
