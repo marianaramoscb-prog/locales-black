@@ -20,13 +20,14 @@ const HOJAS = {
     ["id", "ID"], ["numero", "N°"], ["fecha", "Fecha"], ["cliente", "Cliente"], ["contacto", "Contacto"],
     ["vigencia", "Vigente hasta"], ["estado", "Estado"], ["locales", "Locales"], ["total", "Total USD"],
     ["anticipoPct", "Anticipo %"], ["cuotas", "Cuotas"], ["honorariosPct", "Honorarios %"],
-    ["certificacionArs", "Certificación $"], ["notas", "Notas"], ["detalle", "Detalle (no tocar)"]
+    ["certificacionArs", "Certificación $"], ["notas", "Notas"], ["detalle", "Detalle (no tocar)"], ["asesor", "Asesor"]
   ],
   Reservas: [
     ["id", "ID"], ["fecha", "Fecha"], ["codigo", "Local"], ["cliente", "Cliente"], ["contacto", "Contacto"],
     ["precio", "Precio USD"], ["sena", "Seña USD"], ["vence", "Vence"], ["estado", "Estado"],
-    ["presupuesto", "Presupuesto"], ["notas", "Notas"], ["cerrada", "Cerrada"], ["localId", "ID local"]
+    ["presupuesto", "Presupuesto"], ["notas", "Notas"], ["cerrada", "Cerrada"], ["localId", "ID local"], ["asesor", "Asesor"]
   ],
+  Asesores: [["nombre", "Nombre"], ["telefono", "Teléfono"], ["email", "Email"], ["actualizado", "Actualizado"]],
   Historial: [["ts", "Fecha y hora"], ["texto", "Movimiento"], ["localId", "Local"], ["por", "Usuario"]],
   Config: [["clave", "Clave"], ["valor", "Valor"]]
 };
@@ -50,7 +51,8 @@ const API_ = {
   estadoPresupuesto: (a) => estadoPresupuesto(a[0], a[1], a[2]),
   reservar: (a) => reservar(a[0], a[1], a[2], a[3]),
   cerrarReserva: (a) => cerrarReserva(a[0], a[1], a[2]),
-  guardarPdf: (a) => guardarPdf(a[0], a[1], a[2])
+  guardarPdf: (a) => guardarPdf(a[0], a[1], a[2]),
+  guardarPerfil: (a) => guardarPerfil(a[0], a[1])
 };
 function doPost(e) {
   let r;
@@ -76,7 +78,14 @@ function libro_() {
 }
 function hoja_(nombre) {
   if (HOJAS_[nombre]) return HOJAS_[nombre];
-  const h = libro_().getSheetByName(nombre);
+  let h = libro_().getSheetByName(nombre);
+  if (!h && nombre === "Asesores") {
+    // Hoja nueva (agregada después de la instalación): se crea sola la primera vez
+    h = libro_().insertSheet(nombre);
+    const t = HOJAS[nombre].map(c => c[1]);
+    h.getRange(1, 1, 1, t.length).setValues([t]).setFontWeight("bold").setBackground("#15171a").setFontColor("#ffffff");
+    h.setFrozenRows(1);
+  }
   if (!h) throw new Error("Falta la hoja " + nombre + ". ¿Se ejecutó la función instalar?");
   HOJAS_[nombre] = h;
   return h;
@@ -94,7 +103,14 @@ function aFecha_(s) {
 }
 function columnas_(nombre, h) {
   if (COLS_[nombre]) return COLS_[nombre];
-  const titulos = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0].map(String);
+  const titulos = h.getRange(1, 1, 1, Math.max(1, h.getLastColumn())).getValues()[0].map(String);
+  // Si a la hoja le falta una columna nueva (por ejemplo "Asesor"), se agrega al final
+  const faltan = HOJAS[nombre].filter(([k, t]) => titulos.indexOf(t) < 0).map(c => c[1]);
+  if (faltan.length) {
+    const desde = titulos.filter(x => x !== "").length;
+    h.getRange(1, desde + 1, 1, faltan.length).setValues([faltan]).setFontWeight("bold").setBackground("#15171a").setFontColor("#ffffff");
+    faltan.forEach((t, j) => { titulos[desde + j] = t; });
+  }
   const col = {};
   HOJAS[nombre].forEach(([k, t]) => { const i = titulos.indexOf(t); if (i >= 0) col[k] = i; });
   COLS_[nombre] = col;
@@ -124,7 +140,18 @@ function filaDe_(nombre, o) {
     return v;
   });
 }
-function agregar_(nombre, o) { hoja_(nombre).appendRow(filaDe_(nombre, o)); borrarCache_(); }
+function agregar_(nombre, o) {
+  const h = hoja_(nombre), col = columnas_(nombre, h);
+  const fila = new Array(Math.max(...Object.values(col)) + 1).fill("");
+  Object.keys(col).forEach(k => {
+    let v = o[k];
+    if (v === undefined || v === null) return;
+    if (FECHAS.includes(k) || FECHAS_HORA.includes(k)) v = aFecha_(v);
+    fila[col[k]] = v;
+  });
+  h.appendRow(fila);
+  borrarCache_();
+}
 
 /* Copia rápida de los datos: se guarda unos minutos y se borra con cada cambio */
 const CACHE_PARTES_ = 12;
@@ -199,8 +226,10 @@ function entrar(clave, nombre) {
   const ahora = Date.now();
   const todas = props.getProperties();
   Object.keys(todas).forEach(k => { if (k.indexOf("tok_") === 0) { try { if (JSON.parse(todas[k]).vence < ahora) props.deleteProperty(k); } catch (e) { props.deleteProperty(k); } } });
+  const perfil = perfilDe_(nombre);
+  if (perfil) nombre = perfil.nombre; // mismo nombre aunque lo escriban con otras mayúsculas o espacios
   props.setProperty("tok_" + token, JSON.stringify({ nombre: nombre, vence: ahora + 60 * 24 * 3600 * 1000 }));
-  return JSON.stringify({ token: token, nombre: nombre });
+  return JSON.stringify({ token: token, nombre: nombre, perfil: perfil || { nombre: nombre, telefono: "", email: "" } });
 }
 function salir(token) { if (token) PropertiesService.getScriptProperties().deleteProperty("tok_" + token); return true; }
 function sesion_(token) {
@@ -225,6 +254,33 @@ function cambiarClave() {
   log_("Se cambió la clave de acceso");
   ui.alert("Clave guardada. Ya podés entrar a la app con esa clave.");
 }
+/* ---------------- datos de contacto de cada asesor ---------------- */
+function clavePersona_(n) { return String(n || "").trim().toLowerCase().replace(/\s+/g, " "); }
+function perfilDe_(nombre) {
+  const k = clavePersona_(nombre);
+  const p = leer_("Asesores").find(a => clavePersona_(a.nombre) === k);
+  return p ? { nombre: String(p.nombre), telefono: String(p.telefono || ""), email: String(p.email || "") } : null;
+}
+function guardarPerfil(token, d) {
+  const nombre = sesion_(token);
+  return conLock_(() => {
+    const tel = String((d && d.telefono) || "").trim().slice(0, 40);
+    const mail = String((d && d.email) || "").trim().slice(0, 80);
+    const h = hoja_("Asesores"), col = columnas_("Asesores", h);
+    const n = h.getLastRow();
+    const nombres = n > 1 ? h.getRange(2, col.nombre + 1, n - 1, 1).getValues().map(r => String(r[0])) : [];
+    const i = nombres.findIndex(x => clavePersona_(x) === clavePersona_(nombre));
+    if (i < 0) agregar_("Asesores", { nombre: nombre, telefono: tel, email: mail, actualizado: new Date() });
+    else {
+      const r = h.getRange(i + 2, 1, 1, h.getLastColumn()), f = r.getValues()[0];
+      f[col.telefono] = tel; f[col.email] = mail; f[col.actualizado] = new Date();
+      r.setValues([f]); borrarCache_();
+    }
+    log_("Datos de contacto actualizados: " + nombre);
+    return JSON.stringify({ perfil: { nombre: i < 0 ? nombre : nombres[i], telefono: tel, email: mail }, datos: JSON.parse(datos_()) });
+  });
+}
+
 function log_(texto, localId) {
   agregar_("Historial", { ts: new Date(), texto: texto, localId: localId || "", por: usuario_() });
 }
@@ -252,6 +308,7 @@ function datos_() {
     return {
       id: String(p.id), numero: p.numero, fecha: p.fecha, cliente: p.cliente, contacto: p.contacto,
       vigencia: p.vigencia, estado: p.estado || "abierto", notas: p.notas, items: d.items || [],
+      asesor: d.asesor || (p.asesor ? { nombre: String(p.asesor) } : null),
       cond: { anticipoPct: +p.anticipoPct || 0, cuotas: +p.cuotas || 0, honorariosPct: +p.honorariosPct || 0, certificacionArs: +p.certificacionArs || 0 }
     };
   });
@@ -259,7 +316,8 @@ function datos_() {
   const hist = leer_("Historial").reverse().slice(0, 300);
   const cond = { anticipoPct: 30, cuotas: 36, honorariosPct: 4, certificacionArs: 160000, vigenciaDias: 30 };
   leer_("Config").forEach(c => { if (c.clave in cond) cond[c.clave] = +c.valor; });
-  const t = JSON.stringify({ locales: locales, presus: presus, reservas: reservas, hist: hist, cond: cond, usuario: "__QUIEN__" });
+  const asesores = leer_("Asesores").map(a => ({ nombre: String(a.nombre), telefono: String(a.telefono || ""), email: String(a.email || "") }));
+  const t = JSON.stringify({ locales: locales, presus: presus, reservas: reservas, hist: hist, cond: cond, asesores: asesores, usuario: "__QUIEN__" });
   guardarCache_(t);
   return t.replace('"usuario":"__QUIEN__"', '"usuario":' + JSON.stringify(QUIEN_));
 }
@@ -294,7 +352,8 @@ function crearPresupuesto(token, p) {
       estado: "abierto", locales: p.items.map(i => i.codigo).join(", "),
       total: p.items.reduce((s, i) => s + (+i.precio || 0), 0),
       anticipoPct: p.cond.anticipoPct, cuotas: p.cond.cuotas, honorariosPct: p.cond.honorariosPct,
-      certificacionArs: p.cond.certificacionArs, notas: p.notas, detalle: JSON.stringify({ items: p.items })
+      certificacionArs: p.cond.certificacionArs, notas: p.notas, asesor: QUIEN_,
+      detalle: JSON.stringify({ items: p.items, asesor: perfilDe_(QUIEN_) || { nombre: QUIEN_, telefono: "", email: "" } })
     });
     log_("Presupuesto " + numero + " para " + (p.cliente || "sin cliente") + ": " + p.items.map(i => i.codigo).join(", "));
     return JSON.stringify({ id: id, numero: numero, datos: JSON.parse(datos_()) });
@@ -327,7 +386,7 @@ function reservar(token, ids, d, presuId) {
       agregar_("Reservas", {
         id: "r" + Date.now() + "-" + id, fecha: d.fecha, codigo: l.codigo, cliente: d.cliente, contacto: d.contacto,
         precio: precio_(l), sena: +d.sena || 0, vence: d.vence, estado: "activa",
-        presupuesto: presu ? presu.numero : "", notas: d.notas, localId: id
+        presupuesto: presu ? presu.numero : "", notas: d.notas, localId: id, asesor: QUIEN_
       });
       actualizar_("Locales", id, { estado: "reservado", cliente: d.cliente, actualizado: new Date() });
       log_("Reserva del local " + l.codigo + " para " + d.cliente + (presu ? " (presupuesto " + presu.numero + ")" : ""), l.codigo);
