@@ -510,6 +510,7 @@ async function iniciarSesion(){
   S.uid = s.user.id;
   const { data: yo } = await sb.from("perfiles").select("*").eq("id", S.uid).maybeSingle();
   S.perfil = yo || { nombre: "", email: s.user.email, telefono: "", activo: false, rol: "agente" };
+  if (yo && s.user.email && yo.email !== s.user.email) { S.perfil.email = s.user.email; sb.from("perfiles").update({ email: s.user.email }).eq("id", S.uid).then(() => {}); }
   pintarYo();
   if (!S.perfil.activo || !S.perfil.acceso_id) {
     $("#login").hidden = true; ir("proyectos");
@@ -632,7 +633,7 @@ function misDatos(msg){
    ${msg ? `<p class="aviso" style="color:var(--res)">${esc(msg)}</p>` : ""}
    <label for="m-nom">Nombre y apellido</label><input id="m-nom" value="${esc(p.nombre)}" autocomplete="name">
    <label for="m-tel">Teléfono / WhatsApp</label><input id="m-tel" type="tel" inputmode="tel" autocomplete="tel" value="${esc(p.telefono)}" placeholder="Ej: 11 5555-5555">
-   <label for="m-mail">Email (con el que entrás)</label><input id="m-mail" value="${esc(p.email)}" disabled>
+   <label for="m-mail">Email (con el que entrás)</label><input id="m-mail" type="email" autocomplete="email" inputmode="email" value="${esc(p.email)}"><div class="muted" style="font-size:12px;margin-top:4px">Si lo cambiás, te llega un correo a la dirección nueva para confirmarlo.</div>
    <div class="pie"><button class="prim" id="m-ok">Guardar mis datos</button></div>
    <details style="margin-top:14px"><summary style="cursor:pointer">Cambiar mi contraseña</summary>
      <label for="m-pass">Contraseña nueva (mínimo 6)</label><div class="dos"><input id="m-pass" type="password" autocomplete="new-password"><button id="m-pass-ok">Cambiar</button></div></details>
@@ -649,7 +650,13 @@ function misDatos(msg){
     if (error) toast(errTxt(error)); else { $("#m-pass").value = ""; toast("Contraseña cambiada"); } };
   $("#m-ok").onclick = async e => {
     const nombre = $("#m-nom").value.trim(); if (!nombre) { toast("Poné tu nombre"); return; }
-    const r = await guardar("guardarPerfil", [{ nombre, telefono: $("#m-tel").value.trim() }], "Tus datos quedaron guardados", e.target);
+    const mailNuevo = $("#m-mail").value.trim().toLowerCase(); const cambiaMail = !!mailNuevo && mailNuevo !== String(p.email || "").toLowerCase();
+    if (cambiaMail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailNuevo)) { toast("Ese email no es válido"); return; }
+      e.target.disabled = true; const { error } = await sb.auth.updateUser({ email: mailNuevo }); e.target.disabled = false;
+      if (error) { toast(errTxt(error)); return; }
+    }
+    const r = await guardar("guardarPerfil", [{ nombre, telefono: $("#m-tel").value.trim() }], cambiaMail ? "Datos guardados. Confirmá el cambio de email desde el correo que te llega a la dirección nueva" : "Tus datos quedaron guardados", e.target);
     if (r && r.perfil) { S.perfil = r.perfil; pintarYo(); cerrarDrawer(); }
   };
   $("#drawer").querySelectorAll("[data-clave]").forEach(b => b.onclick = () => {
