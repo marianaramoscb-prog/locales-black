@@ -982,7 +982,7 @@ function renderAdmin(){
     <td>${x.activo?`<span class="pill p-aceptado">Activo</span>`:`<span class="pill p-reservado">Pendiente</span>`}</td>
     <td><select class="a-acc"><option value="">— sin perfil —</option>${acc.map(a=>`<option value="${esc(a.id)}" ${x.acceso_id===a.id?"selected":""}>${esc(a.nombre)}</option>`).join("")}</select></td>
     <td><label class="chk-in"><input type="checkbox" class="a-rol" ${x.rol==="admin"?"checked":""} ${x.id===S.uid?"disabled":""}> Admin</label></td>
-    <td><div class="acc"><button class="prim a-ok">${x.activo?"Guardar":"Dar acceso"}</button>${x.activo&&x.id!==S.uid?`<button class="peligro a-off">Deshabilitar</button>`:""}</div></td></tr>`).join("")}</tbody></table></div>`
+    <td><div class="acc"><button class="prim a-ok">${x.activo?"Guardar":"Dar acceso"}</button>${x.id!==S.uid?`<button class="a-clave">Contraseña temporal</button>`:""}${x.activo&&x.id!==S.uid?`<button class="peligro a-off">Deshabilitar</button>`:""}</div></td></tr>`).join("")}</tbody></table></div>`
     : `<div class="vacio">Todavía no hay cuentas creadas.</div>`;
   eq.querySelectorAll("tr[data-id]").forEach(tr=>{
     const id=tr.dataset.id;
@@ -992,6 +992,17 @@ function renderAdmin(){
     const off=tr.querySelector(".a-off");
     if(off) off.onclick=async e=>{ if(off.dataset.conf!=="1"){ off.dataset.conf="1"; off.textContent="¿Confirmar?"; return; }
       await guardar("cambiarPerfil",[id,{activo:false}],"Cuenta deshabilitada",e.target); };
+    const clave=tr.querySelector(".a-clave");
+    if(clave) clave.onclick=()=>{
+      if(tr.nextElementSibling && tr.nextElementSibling.classList.contains("a-clave-fila")) return;
+      const f=document.createElement("tr"); f.className="a-clave-fila";
+      f.innerHTML=`<td colspan="5"><div class="dos"><input type="text" class="a-pass" autocomplete="off" placeholder="Contraseña temporal (mínimo 6)"><button class="prim a-pass-ok">Guardar</button></div><div class="muted" style="font-size:12px;margin-top:4px">Pasásela a la persona por un medio privado y pedile que la cambie después.</div></td>`;
+      tr.after(f);
+      f.querySelector(".a-pass-ok").onclick=async ev=>{
+        const c=f.querySelector(".a-pass").value.trim(); if(c.length<6){ toast("Mínimo 6 caracteres"); return; }
+        ev.target.disabled=true; const {error}=await sb.rpc("admin_poner_clave",{p_id:id,p_clave:c});
+        if(error){ toast(errTxt(error)); ev.target.disabled=false; } else { toast("Contraseña temporal guardada"); f.remove(); } };
+    };
   });
   const ac=$("#adm-acc"); if(!ac) return;
   const chk=(clase,lista,dis)=>PERMISOS.map(([k,l])=>`<label class="chk-in"><input type="checkbox" class="${clase}" value="${k}" ${lista.includes(k)?"checked":""} ${dis?"disabled":""}> ${esc(l)}</label>`).join("");
