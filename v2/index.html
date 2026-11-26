@@ -553,7 +553,7 @@ async function cargarExtrasLocal(id){
   const puedoBorrar = x => esAdmin() || x === S.uid;
   caja.innerHTML = `
     <h4 style="margin:22px 0 6px">Planos y fotos <span class="muted" style="font-weight:400">(${arch.length})</span></h4>
-    <div class="arch-subir">
+    <div class="arch-subir" ${can("archivos_subir")?"":"hidden"}>
       <select id="x-tipo" aria-label="Tipo de archivo">${Object.entries(TIPOS_ARCH).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select>
       <label class="btn" for="x-file">Subir archivos</label><input id="x-file" type="file" multiple accept="image/*,application/pdf" hidden>
       <span class="muted" id="x-prog" style="font-size:12px"></span>
@@ -565,10 +565,10 @@ async function cargarExtrasLocal(id){
         <figcaption><span class="pill p-${a.tipo === "plano" ? "reservado" : a.tipo === "foto" ? "disponible" : "no_disponible"}">${TIPOS_ARCH[a.tipo] || a.tipo}</span> <span class="arch-nom" title="${esc(a.nombre)}">${esc(a.nombre)}</span>
         <span class="muted">${esc(a.autor || "")} · ${pesoTxt(a.bytes)}</span>${puedoBorrar(a.subido_por) ? `<button class="x-borrar-arch" data-id="${esc(a.id)}" data-ruta="${esc(a.ruta)}">Borrar</button>` : ""}</figcaption></figure>`; }).join("")}</div>`
       : `<div class="muted">Todavía no hay planos ni fotos de esta unidad.</div>`}
-    <h4 style="margin:22px 0 6px">Comentarios internos <span class="muted" style="font-weight:400">· solo los ve el equipo</span></h4>
+    <div ${can("comentarios_ver")?"":"hidden"}><h4 style="margin:22px 0 6px">Comentarios internos <span class="muted" style="font-weight:400">· solo los ve el equipo</span></h4>
     <textarea id="x-com" rows="2" placeholder="Ej: El cliente pidió el plano con medidas; vuelve el jueves."></textarea>
     <div class="pie" style="margin-top:6px"><button id="x-com-ok">Agregar comentario</button></div>
-    ${(co.data || []).map(c => `<div class="coment"><div class="coment-cab"><b>${esc(c.autor || "—")}</b> <span class="muted">${fechaHora(c.creado)}</span>${puedoBorrar(c.autor_id) ? `<button class="x-borrar-com" data-id="${esc(c.id)}">Borrar</button>` : ""}</div><div class="coment-txt">${esc(c.texto)}</div></div>`).join("") || `<div class="muted" style="margin-top:6px">Sin comentarios todavía.</div>`}`;
+    ${(co.data || []).map(c => `<div class="coment"><div class="coment-cab"><b>${esc(c.autor || "—")}</b> <span class="muted">${fechaHora(c.creado)}</span>${puedoBorrar(c.autor_id) ? `<button class="x-borrar-com" data-id="${esc(c.id)}">Borrar</button>` : ""}</div><div class="coment-txt">${esc(c.texto)}</div></div>`).join("") || `<div class="muted" style="margin-top:6px">Sin comentarios todavía.</div>`}</div>`;
 
   $("#x-com-ok").onclick = async e => {
     const t = $("#x-com").value.trim(); if (!t) { toast("Escribí el comentario"); return; }
@@ -833,7 +833,7 @@ function abrirLocal(id){
    <div class="tres">${(CAMPOS_TIPO[tipo] || []).map(campo).join("")}</div>
    <div class="dos"><div><label for="d-estado">Estado</label><select id="d-estado">${Object.entries(ESTADOS).map(([k, n]) => `<option value="${k}" ${l.estado === k ? "selected" : ""}>${n}</option>`).join("")}</select></div><div><label for="d-cliente">Cliente</label><input id="d-cliente" value="${esc(l.cliente)}"></div></div>
    <label for="d-notas">Notas</label><textarea id="d-notas" rows="2">${esc(l.notas)}</textarea>
-   <div class="pie"><button class="prim" id="d-guardar">${nueva ? "Crear " + esc(U.toLowerCase()) : "Guardar cambios"}</button>${!nueva && l.estado === "disponible" ? `<button id="d-reservar">Reservar</button>` : ""}${!nueva && can("unidades_crear") ? `<button class="peligro" id="d-borrar">Borrar</button>` : ""}</div>
+   <div class="pie"><button class="prim" id="d-guardar">${nueva ? "Crear " + esc(U.toLowerCase()) : "Guardar cambios"}</button>${!nueva && l.estado === "disponible" && can("reservar") ? `<button id="d-reservar">Reservar</button>` : ""}${!nueva && can("unidades_crear") ? `<button class="peligro" id="d-borrar">Borrar</button>` : ""}</div>
    ${nueva ? "" : `<h4 style="margin:22px 0 6px">Presupuestos donde aparece</h4>${presus.length ? presus.map(p => `<div>${esc(p.numero)} · ${esc(p.cliente || "sin cliente")} <span class="pill p-${estadoPresu(p)}">${EST_PRESU[estadoPresu(p)]}</span></div>`).join("") : `<div class="muted">Ninguno</div>`}
    <h4 style="margin:16px 0 6px">Reservas</h4>${res.length ? res.map(r => `<div>${fmtF(r.fecha)} · ${esc(r.cliente)}${r.asesor ? ` · <span class="muted">${esc(r.asesor)}</span>` : ""} <span class="pill p-${esc(r.estado)}">${EST_RES[r.estado] || esc(r.estado)}</span></div>`).join("") : `<div class="muted">Ninguna</div>`}
    <div id="d-extras"><div class="muted" style="margin-top:18px">Cargando planos, fotos y comentarios…</div></div>
@@ -911,7 +911,7 @@ async function cargarArchivosProyecto(){
   if (S.pid !== pid) return;
   if (error) { caja.innerHTML = `<p class="aviso">${esc(errTxt(error))}</p>`; return; }
   let urls = {}; if (data.length) { const r = await sb.storage.from("archivos").createSignedUrls(data.map(a => a.ruta), 3600); (r.data || []).forEach(u => { if (u.signedUrl) urls[u.path] = u.signedUrl; }); }
-  caja.innerHTML = `<div class="arch-subir"><select id="pa-tipo">${Object.entries(TIPOS_ARCH).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select><label class="btn" for="pa-file">Subir planos, brochure o fotos</label><input id="pa-file" type="file" multiple accept="image/*,application/pdf" hidden><span class="muted" id="pa-prog"></span></div>
+  caja.innerHTML = `<div class="arch-subir" ${can("archivos_subir")?"":"hidden"}><select id="pa-tipo">${Object.entries(TIPOS_ARCH).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select><label class="btn" for="pa-file">Subir planos, brochure o fotos</label><input id="pa-file" type="file" multiple accept="image/*,application/pdf" hidden><span class="muted" id="pa-prog"></span></div>
     ${data.length ? `<div class="arch-grid">${data.map(a => { const u = urls[a.ruta]; const img = /\.(jpe?g|png|webp)$/i.test(a.ruta);
       return `<figure class="arch"><a href="${u ? esc(u) : "#"}" target="_blank" rel="noopener">${img && u ? `<img src="${esc(u)}" alt="${esc(a.nombre)}" loading="lazy">` : `<div class="arch-doc">PDF</div>`}</a><figcaption><span class="arch-nom">${esc(a.nombre)}</span><span class="muted">${esc(TIPOS_ARCH[a.tipo] || "")} · ${pesoTxt(a.bytes)}</span>${esAdmin() || a.subido_por === S.uid ? `<button class="pa-borrar" data-id="${esc(a.id)}" data-ruta="${esc(a.ruta)}">Borrar</button>` : ""}</figcaption></figure>`; }).join("")}</div>` : `<div class="muted">Todavía no hay archivos generales del proyecto.</div>`}`;
   $("#pa-file").onchange = async e => { const files = [...e.target.files]; e.target.value = ""; let ok = 0;
@@ -1036,7 +1036,7 @@ const PILL_CLI = { nuevo: "no_disponible", contactado: "abierto", visita: "abier
 const TIPOS_SEG = { nota: "Nota", llamada: "Llamada", whatsapp: "WhatsApp", email: "Email", visita: "Visita", reunion: "Reunión" };
 function renderClientes(){
   const caja = $("#cli-lista"); if (!caja) return;
-  const q = ($("#cli-buscar").value || "").toLowerCase().trim(), f = S.fCli || "activos", mios = $("#cli-mios").checked, hoy = hoyISO();
+  const q = ($("#cli-buscar").value || "").toLowerCase().trim(), f = S.fCli || "activos", mios = !can("clientes_ver_todos") || $("#cli-mios").checked, hoy = hoyISO(); $("#cli-mios").closest("label").hidden = !can("clientes_ver_todos");
   $("#f-cli").innerHTML = [["activos", "En curso"], ["todos", "Todos"], ...Object.entries(EST_CLI)].map(([k, n]) => `<button data-k="${k}" aria-pressed="${f === k}">${n}</button>`).join("");
   let cs = S.clientes.filter(c => (f === "todos" || (f === "activos" ? !["compro", "perdido"].includes(c.estado) : c.estado === f)) && (!mios || c.asesor_id === S.uid)
     && (!q || [c.nombre, c.telefono, c.email, c.interes, c.notas].join(" ").toLowerCase().includes(q)));
@@ -1131,7 +1131,7 @@ function renderCobranzas(){
   caja.innerHTML = !cs.length ? `<div class="vacio">Todavía no hay planes de pago. Se arman desde <b>Reservas</b>, con el botón “Plan de pagos” de cada boleto firmado.</div>`
     : lista.length ? `<table><thead><tr><th>Vence</th><th>${esc(unidadLbl())}</th><th>Cliente</th><th>Concepto</th><th class="num">Monto</th><th class="num">Pagado</th><th>Estado</th><th></th></tr></thead><tbody>${lista.map(c => `<tr>
       <td>${fmtF(c.vencimiento)}</td><td><b>${esc(c.codigo)}</b></td><td>${esc(c.cliente)}</td><td>${esc(c.concepto)}${c.notas ? `<div class="muted">${esc(c.notas)}</div>` : ""}</td><td class="num">${usd(c.monto)}</td><td class="num">${c.pagado ? usd(c.pagado) : "—"}${c.fecha_pago ? `<div class="muted">${fmtF(c.fecha_pago)}</div>` : ""}</td>
-      <td><span class="pill p-${EST_CUO[c.est][1]}">${EST_CUO[c.est][0]}</span></td><td>${c.est !== "pagada" ? `<button data-pagar="${esc(c.id)}">Registrar pago</button>` : ""}</td></tr>`).join("")}</tbody></table>` : `<div class="vacio">No hay cuotas con ese filtro.</div>`;
+      <td><span class="pill p-${EST_CUO[c.est][1]}">${EST_CUO[c.est][0]}</span></td><td>${c.est !== "pagada" && can("pagos_registrar") ? `<button data-pagar="${esc(c.id)}">Registrar pago</button>` : ""}</td></tr>`).join("")}</tbody></table>` : `<div class="vacio">No hay cuotas con ese filtro.</div>`;
 }
 $("#f-cob").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { S.fCob = b.dataset.k; renderCobranzas(); } });
 $("#cob-buscar").addEventListener("input", renderCobranzas);
@@ -1253,7 +1253,7 @@ function renderReservas(){
    <td>${r.asesor?esc(r.asesor):"—"}${contactoTxt(asesorDe(r.asesor))?`<div class="muted">${esc(contactoTxt(asesorDe(r.asesor)))}</div>`:""}</td>
    <td class="num">${usd(r.precio)}</td><td class="num">${r.sena?usd(r.sena):"—"}</td><td>${fmtF(r.vence)}${r.estado==="activa"&&r.vence&&r.vence<hoy?`<div class="aviso">Vencida</div>`:""}</td>
    <td><span class="pill p-${esc(r.estado)}">${EST_RES[r.estado]||esc(r.estado)}</span></td>
-   <td><div class="acc"><button data-a="doc" data-id="${esc(r.id)}">Documento</button>${r.estado==="firmada"?`<button data-a="plan" data-id="${esc(r.id)}">Plan de pagos${S.cuotas.some(c=>c.reserva_id===r.id)?" ✓":""}</button>`:""}${r.estado==="activa"?`<button data-a="firmada" data-id="${esc(r.id)}">Firmó boleto</button><button class="peligro" data-a="caida" data-id="${esc(r.id)}">Se cayó</button>`:""}</div></td></tr>`).join("")}</tbody></table>`;
+   <td><div class="acc"><button data-a="doc" data-id="${esc(r.id)}">Documento</button>${r.estado==="firmada"&&can("plan_pagos")?`<button data-a="plan" data-id="${esc(r.id)}">Plan de pagos${S.cuotas.some(c=>c.reserva_id===r.id)?" ✓":""}</button>`:""}${r.estado==="activa"&&can("firmar_reservas")?`<button data-a="firmada" data-id="${esc(r.id)}">Firmó boleto</button><button class="peligro" data-a="caida" data-id="${esc(r.id)}">Se cayó</button>`:""}</div></td></tr>`).join("")}</tbody></table>`;
 }
 $("#res-lista").addEventListener("click",e=>{ const b=e.target.closest("button[data-a]"); if(!b) return; const r=S.reservas.find(x=>x.id===b.dataset.id); if(!r) return;
   if(b.dataset.a==="doc"){ generadorReserva({ids:[String(r.localId)], reserva:r}); return; }
