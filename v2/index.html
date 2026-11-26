@@ -123,6 +123,13 @@ nav.tabs button{color:var(--on-brand);opacity:.7;background:transparent;border:0
 nav.tabs button:hover{opacity:1}
 nav.tabs button[aria-current]{opacity:1;background:rgba(255,255,255,.14)}
 .cargando{opacity:.55;pointer-events:none}
+.sec-t{font:700 16px/1.2 var(--f-display);margin:18px 0 8px}
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 12px;margin-top:6px}
+.acc-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.acc-card.nuevo{border-style:dashed}
+.acc-cab{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.acc-cab input{max-width:320px}
+.acc-card .ac-desc,#ac-n-desc{margin-bottom:4px}
 .tit-caja{min-width:0}
 #volver{background:transparent;color:var(--on-brand);border-color:rgba(255,255,255,.3);padding:5px 10px;font-size:12.5px}
 .chk-in{display:inline-flex;gap:6px;align-items:center;margin:0;color:var(--muted);font-size:13px}
@@ -244,7 +251,7 @@ a.btn{text-decoration:none;display:inline-block}
   <button id="yo" title="Mis datos de contacto">Mis datos</button>
   <button id="salir" title="Cerrar sesión en este dispositivo">Salir</button>
   <nav class="tabs" aria-label="Secciones">
-    <button data-v="locales">Unidades</button><button data-v="presupuestos">Presupuestos</button><button data-v="reservas">Reservas</button><button data-v="clientes">Clientes</button><button data-v="cobranzas">Cobranzas</button><button data-v="historial">Historial</button><button data-v="proyecto">Proyecto</button>
+    <button data-v="locales">Unidades</button><button data-v="presupuestos">Presupuestos</button><button data-v="reservas">Reservas</button><button data-v="clientes">Clientes</button><button data-v="cobranzas">Cobranzas</button><button data-v="historial">Historial</button><button data-v="admin" hidden>Administración</button><button data-v="proyecto">Proyecto</button>
   </nav>
 </div></header>
 
@@ -298,6 +305,12 @@ a.btn{text-decoration:none;display:inline-block}
     <div><div class="form"><h3>Planos, brochure y fotos del proyecto</h3><div id="proy-arch"></div></div>
     <div class="form" id="imp-caja" style="margin-top:14px"><h3>Importar unidades desde Excel</h3><p class="muted" style="font-size:13px">Subí la lista de precios (.xlsx, .xls o .csv). Vas a poder elegir qué columna es cada dato antes de importar. Si una unidad ya existe con el mismo código, se actualiza.</p>
       <label class="btn" for="imp-file">Elegir archivo</label><input id="imp-file" type="file" accept=".xlsx,.xls,.csv" hidden><div id="imp-mapa" style="margin-top:12px"></div></div></div></div>
+  </section>
+
+  <section class="vista" id="v-admin" hidden>
+    <div class="barra"><h2>Administración</h2><span class="muted">Dá acceso a quienes se registraron y elegí qué pueden hacer y ver.</span></div>
+    <h3 class="sec-t">Equipo</h3><div id="adm-equipo"></div>
+    <h3 class="sec-t">Perfiles de acceso</h3><div class="muted" style="margin-bottom:8px">Cada perfil define qué puede hacer cada persona. Los proyectos a los que accede se eligen en la tabla de Equipo.</div><div id="adm-acc"></div>
   </section>
 
   <section class="vista" id="v-historial" hidden>
@@ -405,24 +418,25 @@ async function leerTodo(){
     sb.from("presupuestos").select("*").order("nro", { ascending: false }),
     sb.from("reservas").select("*").order("fecha", { ascending: false }),
     sb.from("historial").select("ts,texto,unidad_id,proyecto_id,usuario").order("id", { ascending: false }).limit(600),
-    sb.from("perfiles").select("id,nombre,telefono,email,rol,activo,creado").order("creado"),
+    sb.from("perfiles").select("id,nombre,telefono,email,rol,activo,creado,acceso_id,proyectos").order("creado"),
     sb.from("clientes").select("*").order("actualizado", { ascending: false }),
-    sb.from("cuotas").select("*").order("vencimiento")
+    sb.from("cuotas").select("*").order("vencimiento"),
+    sb.from("perfiles_acceso").select("*").order("orden")
   ]);
   const err = q.find(r => r.error); if (err) throw err.error;
-  const [pr, un, pre, re, hi, pe, cl, cu] = q.map(r => r.data);
+  const [pr, un, pre, re, hi, pe, cl, cu, ac] = q.map(r => r.data);
   return {
     proyectos: pr,
     unidades: un.map(mapUnidad),
     presus: pre.map(p => ({ id: p.id, pid: p.proyecto_id, clienteId: p.cliente_id, numero: nroTxt(p.nro), fecha: p.fecha || "", cliente: p.cliente, contacto: p.contacto, vigencia: p.vigencia || "", estado: p.estado, notas: p.notas, items: p.items || [], cond: { anticipoPct: 30, cuotas: 36, honorariosPct: 4, certificacionArs: 0, ...(p.cond || {}) }, asesor: p.asesor })),
     reservas: re.map(r => ({ id: r.id, pid: r.proyecto_id, clienteId: r.cliente_id, fecha: r.fecha, localId: r.unidad_id, codigo: r.codigo, cliente: r.cliente, contacto: r.contacto, precio: +r.precio || 0, sena: +r.sena || 0, vence: r.vence || "", estado: r.estado, presupuesto: r.presupuesto_nro, notas: r.notas, cerrada: r.cerrada || "", asesor: r.asesor, documento: r.documento })),
     hist: hi.map(h => ({ ts: new Date(h.ts).toLocaleString("sv-SE").replace(" ", "T"), texto: h.texto, localId: h.unidad_id, pid: h.proyecto_id, por: h.usuario })),
-    equipo: pe, clientes: cl, cuotas: cu.map(c => ({ ...c, monto: +c.monto, pagado: +c.pagado }))
+    equipo: pe.map(p => ({ ...p, permisos: ((ac || []).find(a => a.id === p.acceso_id) || {}).permisos || [] })), accesos: ac || [], clientes: cl, cuotas: cu.map(c => ({ ...c, monto: +c.monto, pagado: +c.pagado }))
   };
 }
 function aplicar(d, deCopia){
   if (!deCopia) { try { localStorage.setItem("gd-datos", JSON.stringify(d)); } catch (e) {} }
-  S.todo = d; S.proyectos = d.proyectos; S.equipo = d.equipo || [];
+  S.todo = d; S.proyectos = d.proyectos; S.equipo = d.equipo || []; S.accesos = d.accesos || [];
   S.asesores = S.equipo.filter(p => p.activo).map(p => ({ id: p.id, nombre: p.nombre || p.email, telefono: p.telefono, email: p.email }));
   const mio = S.equipo.find(p => p.id === S.uid); if (mio) S.perfil = mio;
   S.cargado = true;
@@ -447,7 +461,7 @@ async function cargar(){
   catch (e) { $("#conn").textContent = "No se pudieron leer los datos: " + errTxt(e); }
 }
 let recargaPend = null;
-function recargarPronto(){ clearTimeout(recargaPend); recargaPend = setTimeout(() => { if ($("#presu-editor").hidden && $("#gen").hidden) cargar(); else recargarPronto(); }, 700); }
+function recargarPronto(){ if (S.vista === "admin") { S.pendRef = true; return; } clearTimeout(recargaPend); recargaPend = setTimeout(() => { if ($("#presu-editor").hidden && $("#gen").hidden && S.vista !== "admin") cargar(); else recargarPronto(); }, 700); }
 function suscribir(){
   if (S.canal) return;
   S.canal = sb.channel("cambios");
@@ -467,6 +481,8 @@ const OPS = {
   async cerrarReserva(id, tipo){ const { error } = await sb.rpc("cerrar_reserva", { p_id: id, p_tipo: tipo }); if (error) throw error; return {}; },
   async guardarPerfil(d){ const { data, error } = await sb.from("perfiles").update({ nombre: d.nombre, telefono: d.telefono }).eq("id", S.uid).select().single(); if (error) throw error; return { perfil: data }; },
   async cambiarPerfil(id, campos){ const { error } = await sb.from("perfiles").update(campos).eq("id", id); if (error) throw error; return {}; },
+  async guardarAcceso(id, campos){ const q = id ? sb.from("perfiles_acceso").update(campos).eq("id", id) : sb.from("perfiles_acceso").insert(campos); const { error } = await q; if (error) throw error; return {}; },
+  async borrarAcceso(id){ const { error } = await sb.from("perfiles_acceso").delete().eq("id", id); if (error) throw error; return {}; },
   async guardarProyecto(id, campos){ const q = id ? sb.from("proyectos").update(campos).eq("id", id).select().single() : sb.from("proyectos").insert(campos).select().single(); const { data, error } = await q; if (error) throw error; await sb.rpc("registrar", { p_texto: (id ? "Proyecto actualizado: " : "Proyecto nuevo: ") + data.nombre, p_unidad: null, p_proyecto: data.id }); return { id: data.id }; },
   async nuevaUnidad(campos){ const { data, error } = await sb.from("unidades").insert({ ...campos, proyecto_id: S.pid }).select().single(); if (error) throw error; await sb.rpc("registrar", { p_texto: "Unidad nueva: " + data.codigo, p_unidad: data.id, p_proyecto: S.pid }); return { id: data.id }; },
   async borrarUnidad(id){ const u = S.locales[id]; const { error } = await sb.from("unidades").delete().eq("id", id); if (error) throw error; await sb.rpc("registrar", { p_texto: "Unidad borrada: " + (u ? u.codigo : id), p_unidad: null, p_proyecto: S.pid }); return {}; },
@@ -483,7 +499,7 @@ async function guardar(fn, args, msg, boton){
   finally { document.body.classList.remove("cargando"); }
 }
 $("#btn-act").onclick = () => { $("#conn").textContent = "Actualizando…"; cargar(); };
-setInterval(() => { if (S.uid && !document.hidden && $("#drawer").hidden && $("#presu-editor").hidden && $("#gen").hidden) cargar(); }, 120000);
+setInterval(() => { if (S.uid && !document.hidden && $("#drawer").hidden && $("#presu-editor").hidden && $("#gen").hidden && S.vista !== "admin") cargar(); }, 120000);
 
 /* Sesión */
 async function iniciarSesion(){
@@ -493,9 +509,9 @@ async function iniciarSesion(){
   const { data: yo } = await sb.from("perfiles").select("*").eq("id", S.uid).maybeSingle();
   S.perfil = yo || { nombre: "", email: s.user.email, telefono: "", activo: false, rol: "agente" };
   pintarYo();
-  if (!S.perfil.activo) {
+  if (!S.perfil.activo || !S.perfil.acceso_id) {
     $("#login").hidden = true; ir("proyectos");
-    $("#proy-lista").innerHTML = `<div class="vacio"><b>Tu cuenta está pendiente de habilitación.</b><br>Avisale a un administrador del equipo para que la habilite desde “Mis datos → Equipo”. Después recargá esta página.</div>`;
+    $("#proy-lista").innerHTML = `<div class="vacio"><b>${S.perfil.activo ? "Tu cuenta todavía no tiene un perfil de acceso." : "Tu cuenta está pendiente de habilitación."}</b><br>Avisale a un administrador del equipo para que le asigne acceso desde la pestaña Administración. Después recargá esta página.</div>`;
     $("#conn").textContent = "Cuenta pendiente de habilitación · " + (S.perfil.email || ""); return;
   }
   $("#login").hidden = true;
@@ -651,6 +667,17 @@ function misDatos(msg){
 function pintarYo(){ const n = (S.perfil && (S.perfil.nombre || S.perfil.email)) || ""; const pend = esAdmin() ? (S.equipo || []).filter(x => !x.activo).length : 0; $("#yo").textContent = (n ? n.split(" ")[0] + " · " : "") + "Mis datos" + (pend ? ` (${pend})` : ""); }
 $("#yo").onclick = () => misDatos();
 
+/* ---------- permisos del usuario ---------- */
+const can = p => !!(S.perfil && S.perfil.activo && (S.perfil.permisos || []).includes(p));
+function aplicarPermisos(){
+  const v=(sel,ok)=>{ const el=document.querySelector(sel); if(el) el.hidden=!ok; };
+  v('nav.tabs button[data-v="admin"]', esAdmin());
+  v('nav.tabs button[data-v="cobranzas"]', can("cobranzas_ver"));
+  v('#btn-nuevo-presu', can("presupuestos_crear"));
+  v('#btn-nueva-res', can("reservar"));
+  v('#btn-nuevo-cli', can("clientes_cargar"));
+}
+
 /* ---------- proyectos y tipos ---------- */
 const TIPOS_PROY = { edificio: "Edificio de departamentos", barrio: "Barrio cerrado", condominio: "Condominio", comercial: "Centro comercial / locales", otro: "Otro" };
 const NIVELES_DEF = { edificio: { grupo: "Torre", subgrupo: "Piso", unidad: "Departamento" }, barrio: { grupo: "Etapa", subgrupo: "Manzana", unidad: "Lote" },
@@ -676,12 +703,13 @@ function calcularPlantas(){
 }
 
 /* ---------- vistas ---------- */
-const VISTAS = ["proyectos", "locales", "presupuestos", "reservas", "clientes", "cobranzas", "historial", "proyecto"];
+const VISTAS = ["proyectos", "locales", "presupuestos", "reservas", "clientes", "cobranzas", "historial", "proyecto", "admin"];
 function ir(v, pid){
   if (pid !== undefined && pid !== S.pid) { S.pid = pid; S.fPlanta = "todas"; S.fEstado = "todos"; filtrarProyecto(); renderTodo(); }
   if (v !== "proyectos" && !S.pid) v = "proyectos";
-  S.vista = v;
+  const salia = S.vista === "admin" && v !== "admin"; S.vista = v; if (salia && S.pendRef) { S.pendRef = false; cargar(); }
   VISTAS.forEach(x => { $("#v-" + x).hidden = x !== v; const b = document.querySelector(`nav.tabs button[data-v="${x}"]`); if (b) { if (x === v) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); } });
+  aplicarPermisos();
   const enProy = v !== "proyectos";
   $("nav.tabs").hidden = !enProy; $("#volver").hidden = !enProy; $("#resumen").hidden = !enProy || !["locales", "presupuestos", "reservas"].includes(v);
   const p = P();
@@ -711,7 +739,7 @@ function statsProyecto(pid){
 function renderProyectos(){
   const caja = $("#proy-lista"); if (!caja) return;
   if (!S.uid || !(S.perfil && S.perfil.activo)) return;
-  $("#btn-nuevo-proy").hidden = !esAdmin();
+  $("#btn-nuevo-proy").hidden = !can("proyectos_admin");
   const lista = (S.proyectos || []).filter(p => S.verArchivados || p.estado !== "archivado");
   if (!S.cargado) { caja.innerHTML = `<div class="vacio">Cargando proyectos…</div>`; return; }
   if (!lista.length) { caja.innerHTML = `<div class="vacio">Todavía no hay proyectos.${esAdmin() ? " Tocá “Nuevo proyecto” para cargar el primero." : ""}</div>`; return; }
@@ -745,7 +773,7 @@ function renderResumen(){
 function renderFiltros(){
   $("#f-planta").innerHTML = PLANTAS.length > 1 ? [["todas", "Todas"], ...PLANTAS.map(p => [p.k, p.n])].map(([k, n]) => `<button data-k="${esc(k)}" aria-pressed="${S.fPlanta === k}">${esc(n)}</button>`).join("") : "";
   $("#f-estado").innerHTML = [["todos", "Todos"], ["disponible", "Disponibles"], ["reservado", "Reservados"], ["vendido", "Vendidos"]].map(([k, n]) => `<button data-k="${k}" aria-pressed="${S.fEstado === k}">${n}</button>`).join("");
-  $("#btn-nueva-unidad").hidden = !esAdmin(); $("#btn-nueva-unidad").textContent = "Nuevo " + unidadLbl().toLowerCase();
+  $("#btn-nueva-unidad").hidden = !can("unidades_crear"); $("#btn-nueva-unidad").textContent = "Nuevo " + unidadLbl().toLowerCase();
   $("#t-unidades").textContent = "Disponibilidad";
 }
 $("#f-planta").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.fPlanta = b.dataset.k; renderFiltros(); renderTablero(); });
@@ -801,7 +829,7 @@ function abrirLocal(id){
    <div class="tres">${(CAMPOS_TIPO[tipo] || []).map(campo).join("")}</div>
    <div class="dos"><div><label for="d-estado">Estado</label><select id="d-estado">${Object.entries(ESTADOS).map(([k, n]) => `<option value="${k}" ${l.estado === k ? "selected" : ""}>${n}</option>`).join("")}</select></div><div><label for="d-cliente">Cliente</label><input id="d-cliente" value="${esc(l.cliente)}"></div></div>
    <label for="d-notas">Notas</label><textarea id="d-notas" rows="2">${esc(l.notas)}</textarea>
-   <div class="pie"><button class="prim" id="d-guardar">${nueva ? "Crear " + esc(U.toLowerCase()) : "Guardar cambios"}</button>${!nueva && l.estado === "disponible" ? `<button id="d-reservar">Reservar</button>` : ""}${!nueva && esAdmin() ? `<button class="peligro" id="d-borrar">Borrar</button>` : ""}</div>
+   <div class="pie"><button class="prim" id="d-guardar">${nueva ? "Crear " + esc(U.toLowerCase()) : "Guardar cambios"}</button>${!nueva && l.estado === "disponible" ? `<button id="d-reservar">Reservar</button>` : ""}${!nueva && can("unidades_crear") ? `<button class="peligro" id="d-borrar">Borrar</button>` : ""}</div>
    ${nueva ? "" : `<h4 style="margin:22px 0 6px">Presupuestos donde aparece</h4>${presus.length ? presus.map(p => `<div>${esc(p.numero)} · ${esc(p.cliente || "sin cliente")} <span class="pill p-${estadoPresu(p)}">${EST_PRESU[estadoPresu(p)]}</span></div>`).join("") : `<div class="muted">Ninguno</div>`}
    <h4 style="margin:16px 0 6px">Reservas</h4>${res.length ? res.map(r => `<div>${fmtF(r.fecha)} · ${esc(r.cliente)}${r.asesor ? ` · <span class="muted">${esc(r.asesor)}</span>` : ""} <span class="pill p-${esc(r.estado)}">${EST_RES[r.estado] || esc(r.estado)}</span></div>`).join("") : `<div class="muted">Ninguna</div>`}
    <div id="d-extras"><div class="muted" style="margin-top:18px">Cargando planos, fotos y comentarios…</div></div>
@@ -868,9 +896,9 @@ function editorProyecto(id){
 }
 function renderProyectoTab(){
   if (!P()) return;
-  if (esAdmin()) editorProyecto(P().id);
+  if (can("proyectos_admin")) editorProyecto(P().id);
   else $("#proy-form").innerHTML = `<div class="form"><h3>${esc(P().nombre)}</h3><p>${esc(TIPOS_PROY[P().tipo] || "")} · ${esc([P().direccion, P().localidad].filter(Boolean).join(", "))}</p><p class="muted">${esc(P().descripcion || "")}</p><p class="muted">Solo un administrador puede cambiar los datos del proyecto.</p></div>`;
-  $("#imp-caja").hidden = !esAdmin();
+  $("#imp-caja").hidden = !can("unidades_crear");
   cargarArchivosProyecto();
 }
 async function cargarArchivosProyecto(){
@@ -931,6 +959,53 @@ function pintarImport(){
   $("#imp-ok").onclick = async e => { const filas = S.imp.validas.map(o => { const f = { ...o }; Object.keys(f).forEach(k => { if (f[k] === undefined) delete f[k]; }); if (f.estado == null) f.estado = "disponible"; return f; });
     const dup = filas.map(f => f.codigo).filter((c, i, a) => a.indexOf(c) !== i); if (dup.length) { toast("Hay códigos repetidos en el archivo: " + [...new Set(dup)].slice(0, 5).join(", ")); return; }
     if (await guardar("importarUnidades", [filas], `${filas.length} unidades importadas`, e.target)) { S.imp = null; $("#imp-mapa").innerHTML = ""; ir("locales"); } };
+}
+
+/* ---------- administración: cuentas, perfiles y proyectos por persona ---------- */
+const PERMISOS = [["unidades_editar","Editar unidades: estado, cliente, notas"],["unidades_crear","Crear, importar y borrar unidades"],["precios_editar","Cambiar precios y superficies"],["presupuestos_crear","Armar presupuestos"],["reservar","Registrar reservas"],["firmar_reservas","Marcar boletos firmados o caídos"],["clientes_cargar","Cargar y editar clientes"],["clientes_ver_todos","Ver los clientes de todo el equipo (si no, solo los propios)"],["cobranzas_ver","Ver cobranzas"],["pagos_registrar","Registrar pagos"],["plan_pagos","Armar planes de pago"],["comentarios_ver","Ver y escribir comentarios internos"],["archivos_subir","Subir planos y fotos"],["proyectos_admin","Crear y editar proyectos"]];
+function renderAdmin(){
+  const eq=$("#adm-equipo"); if(!eq || !esAdmin()) return;
+  const acc=S.accesos||[], pr=(S.todo&&S.todo.proyectos)||[];
+  const lista=[...(S.equipo||[])].sort((a,b)=>Number(b.activo)-Number(a.activo)||String(a.nombre||a.email).localeCompare(String(b.nombre||b.email)));
+  eq.innerHTML = lista.length ? `<div class="tabla"><table><thead><tr><th>Persona</th><th>Estado</th><th>Perfil de acceso</th><th>Proyectos</th><th>Admin</th><th></th></tr></thead><tbody>${lista.map(x=>`<tr data-id="${esc(x.id)}">
+    <td><b>${esc(x.nombre||"(sin nombre)")}</b><div class="muted">${esc(x.email)}</div>${x.telefono?`<div class="muted">${esc(x.telefono)}</div>`:""}</td>
+    <td>${x.activo?`<span class="pill p-aceptado">Activo</span>`:`<span class="pill p-reservado">Pendiente</span>`}</td>
+    <td><select class="a-acc"><option value="">— sin perfil —</option>${acc.map(a=>`<option value="${esc(a.id)}" ${x.acceso_id===a.id?"selected":""}>${esc(a.nombre)}</option>`).join("")}</select></td>
+    <td><label class="chk-in"><input type="checkbox" class="a-todos" ${(x.proyectos||[]).length?"":"checked"}> Todos</label>${pr.map(p=>`<label class="chk-in"><input type="checkbox" class="a-pro" value="${esc(p.id)}" ${(x.proyectos||[]).includes(p.id)?"checked":""}> ${esc(p.nombre)}</label>`).join("")}</td>
+    <td><label class="chk-in"><input type="checkbox" class="a-rol" ${x.rol==="admin"?"checked":""} ${x.id===S.uid?"disabled":""}> Admin</label></td>
+    <td><div class="acc"><button class="prim a-ok">${x.activo?"Guardar":"Dar acceso"}</button>${x.activo&&x.id!==S.uid?`<button class="peligro a-off">Deshabilitar</button>`:""}</div></td></tr>`).join("")}</tbody></table></div>`
+    : `<div class="vacio">Todavía no hay cuentas creadas.</div>`;
+  eq.querySelectorAll("tr[data-id]").forEach(tr=>{
+    const id=tr.dataset.id, todos=tr.querySelector(".a-todos"), pros=[...tr.querySelectorAll(".a-pro")];
+    todos.onchange=()=>{ if(todos.checked) pros.forEach(c=>c.checked=false); else if(!pros.some(c=>c.checked)) todos.checked=true; };
+    pros.forEach(c=>c.onchange=()=>{ if(c.checked) todos.checked=false; else if(!pros.some(p=>p.checked)) todos.checked=true; });
+    tr.querySelector(".a-ok").onclick=async e=>{
+      const perfil=tr.querySelector(".a-acc").value; if(!perfil){ toast("Elegí un perfil de acceso"); return; }
+      const proy=todos.checked?[]:pros.filter(c=>c.checked).map(c=>c.value);
+      if(!todos.checked && !proy.length){ toast("Elegí al menos un proyecto o “Todos”"); return; }
+      await guardar("cambiarPerfil",[id,{activo:true,acceso_id:perfil,proyectos:proy,rol:tr.querySelector(".a-rol").checked?"admin":"agente"}],"Acceso guardado",e.target); };
+    const off=tr.querySelector(".a-off");
+    if(off) off.onclick=async e=>{ if(off.dataset.conf!=="1"){ off.dataset.conf="1"; off.textContent="¿Confirmar?"; return; }
+      await guardar("cambiarPerfil",[id,{activo:false}],"Cuenta deshabilitada",e.target); };
+  });
+  const ac=$("#adm-acc"); if(!ac) return;
+  const chk=(clase,lista,dis)=>PERMISOS.map(([k,l])=>`<label class="chk-in"><input type="checkbox" class="${clase}" value="${k}" ${lista.includes(k)?"checked":""} ${dis?"disabled":""}> ${esc(l)}</label>`).join("");
+  ac.innerHTML = acc.map(a=>{ const adm=a.nombre==="Administrador"; return `<div class="acc-card" data-id="${esc(a.id)}">
+      <div class="acc-cab"><input class="ac-nom" value="${esc(a.nombre)}" ${adm?"disabled":""}><button class="prim ac-ok">Guardar</button>${adm?"":`<button class="peligro ac-del">Eliminar</button>`}</div>
+      <input class="ac-desc" value="${esc(a.descripcion)}" placeholder="Descripción" ${adm?"disabled":""}>
+      <div class="perm-grid">${chk("ac-p",a.permisos||[],adm)}</div></div>`; }).join("")
+    + `<div class="acc-card nuevo"><div class="acc-cab"><input id="ac-n-nom" placeholder="Nombre del perfil (ej: Asesor senior)"><button class="prim" id="ac-n-ok">Crear perfil</button></div><input id="ac-n-desc" placeholder="Descripción"><div class="perm-grid">${chk("ac-n-p",[],false)}</div></div>`;
+  ac.querySelectorAll(".acc-card[data-id]").forEach(card=>{ const id=card.dataset.id;
+    card.querySelector(".ac-ok").onclick=async e=>{
+      const campos={descripcion:card.querySelector(".ac-desc").value.trim(), permisos:[...card.querySelectorAll(".ac-p:checked")].map(c=>c.value)};
+      const nom=card.querySelector(".ac-nom"); if(!nom.disabled){ if(!nom.value.trim()){ toast("Poné un nombre"); return; } campos.nombre=nom.value.trim(); }
+      await guardar("guardarAcceso",[id,campos],"Perfil guardado",e.target); };
+    const del=card.querySelector(".ac-del");
+    if(del) del.onclick=async e=>{ if(del.dataset.conf!=="1"){ del.dataset.conf="1"; del.textContent="¿Eliminar? Quienes lo tengan quedan sin acceso"; return; }
+      await guardar("borrarAcceso",[id],"Perfil eliminado",e.target); };
+  });
+  $("#ac-n-ok").onclick=async e=>{ const nombre=$("#ac-n-nom").value.trim(); if(!nombre){ toast("Poné un nombre para el perfil"); return; }
+    await guardar("guardarAcceso",[null,{nombre,descripcion:$("#ac-n-desc").value.trim(),permisos:[...ac.querySelectorAll(".ac-n-p:checked")].map(c=>c.value),orden:50}],"Perfil creado",e.target); };
 }
 
 /* ---------- clientes interesados ---------- */
@@ -1403,7 +1478,7 @@ function renderHist(){
   $("#hist").innerHTML = S.hist.length ? S.hist.map(h=>`<li><time>${fmtF((h.ts||"").slice(0,10))} ${(h.ts||"").slice(11,16)}</time><span>${esc(h.texto)}${h.por?` <span class="muted">· ${esc(String(h.por).split("@")[0])}</span>`:""}</span></li>`).join("") : `<li class="vacio">Todavía no hay movimientos.</li>`;
 }
 
-function renderTodo(){ renderProyectos(); if(!S.pid) return; renderResumen(); renderTablero(); renderPresus(); renderReservas(); renderClientes(); renderCobranzas(); renderHist(); }
+function renderTodo(){ renderProyectos(); aplicarPermisos(); renderAdmin(); if(!S.pid) return; renderResumen(); renderTablero(); renderPresus(); renderReservas(); renderClientes(); renderCobranzas(); renderHist(); }
 ir("proyectos"); renderFiltros(); iniciarSesion();
 </script>
 </body>
