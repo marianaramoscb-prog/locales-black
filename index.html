@@ -133,6 +133,11 @@ nav.tabs button[aria-current]{opacity:1;background:rgba(255,255,255,.14)}
 .gpanel{overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:14px 16px 40px}
 .gpanel fieldset{border:1px solid var(--line);border-radius:8px;padding:6px 12px 12px;margin:0 0 12px}
 .gpanel legend{font-weight:600;padding:0 4px}
+.gcomp{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.gcomp:first-child{border-top:0;margin-top:0;padding-top:4px}
+.gcomp-cab{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.gcomp-cab button{padding:3px 9px;font-size:12px}
+.gcomp .seg button{padding:4px 12px}
 .gpanel .lista-locs{max-height:210px}
 .gpanel details.fijos{border:1px dashed var(--line);border-radius:8px;padding:8px 12px;margin:0 0 12px}
 .gpanel details.fijos summary{cursor:pointer;font-weight:600}
@@ -610,29 +615,36 @@ function docReservaHTML(R){
   const f=R.fecha?new Date(R.fecha+"T12:00:00"):null;
   const fechaTxt = f?`a los ${f.getDate()} días del mes ${MESES[f.getMonth()]} de ${f.getFullYear()}`:"a los ___ días del mes ________ de ____";
   const C=R.corredor;
+  const cs=R.compradores.length?R.compradores:[{genero:"m"}];
+  const pl=cs.length>1, fem=cs.every(c=>c.genero==="f");
+  const G={ art: pl?(fem?"las":"los"):(fem?"la":"el"), sust: pl?(fem?"Compradoras":"Compradores"):(fem?"Compradora":"Comprador"),
+    inf: pl?(fem?"informadas":"informados"):(fem?"informada":"informado"), ofer: pl?"Ofertantes":"Ofertante" };
+  G.Art=G.art[0].toUpperCase()+G.art.slice(1);
+  const vb=(sg,p)=>pl?p:sg;
+  const personas=cs.map((c,i)=>`${i?"y de ":""}${v(c.nombre&&c.nombre.toUpperCase(),"NOMBRE Y APELLIDO")} ${esc(c.tipoDoc||"D.N.I.")} ${v(c.doc,"número")}, estado civil ${v(c.estadoCivil,"estado civil")}, ${c.genero==="f"?"domiciliada":"domiciliado"} en la calle ${v(c.domicilio,"domicilio")}, y electrónico ${v(c.email,"email")}`).join(", ");
   const cab=`<div class="dmem"><img src="${MEMBRETE}" alt="F. Lusarreta · Coldwell Banker Nova"></div>`;
   return `
 <section class="dpag">${cab}
 <h2 class="dtit">RESERVA FIDEICOMISO INMOBILIARIO BLACK</h2>
-<p>${esc(C.nombre)}, con matrícula de ${esc(C.matricula)}, adherido al sistema ${esc(C.sistema)}, con domicilio legal en la ${esc(C.domicilio)} (en adelante “El Corredor”) actuando por cuenta y orden en este acto del <b>FIDEICOMISO INMOBILIARIO BLACK</b>, recibe en este acto de ${v(R.nombre&&R.nombre.toUpperCase(),"NOMBRE Y APELLIDO")} ${esc(R.tipoDoc)} ${v(R.doc,"número")}, estado civil ${v(R.estadoCivil,"estado civil")}, domiciliado en la calle ${v(R.domicilio,"domicilio")}, y electrónico ${v(R.email,"email")} (en adelante el “Comprador”), la suma de dólares estadounidenses billete ${R.monto?enLetras(R.monto):"____"} (${R.monto?uss(R.monto):"U$S____"}) en concepto de RESERVA (en adelante la “Reserva”), que estará sujeta a los términos y condiciones que a continuación se detallan:</p>
-<p><b>ANTECEDENTES:</b> El Comprador declara haber sido debidamente informado por la Inmobiliaria del estado en que se encuentra el emprendimiento “PASEO DE COMPRAS BLACK”. Asimismo, declara haber sido debidamente informado de la estructura legal del emprendimiento FIDEICOMISO INMOBILIARIO BLACK, Clave Única de Identificación Tributaria 30-71866388-8, constituido el día el 5 de marzo de 2024.</p>
+<p>${esc(C.nombre)}, con matrícula de ${esc(C.matricula)}, adherido al sistema ${esc(C.sistema)}, con domicilio legal en la ${esc(C.domicilio)} (en adelante “El Corredor”) actuando por cuenta y orden en este acto del <b>FIDEICOMISO INMOBILIARIO BLACK</b>, recibe en este acto de ${personas} (en adelante ${G.art} “${G.sust}”), la suma de dólares estadounidenses billete ${R.monto?enLetras(R.monto):"____"} (${R.monto?uss(R.monto):"U$S____"}) en concepto de RESERVA (en adelante la “Reserva”), que estará sujeta a los términos y condiciones que a continuación se detallan:</p>
+<p><b>ANTECEDENTES:</b> ${G.Art} ${G.sust} ${vb("declara","declaran")} haber sido debidamente ${G.inf} por la Inmobiliaria del estado en que se encuentra el emprendimiento “PASEO DE COMPRAS BLACK”. Asimismo, ${vb("declara","declaran")} haber sido debidamente ${G.inf} de la estructura legal del emprendimiento FIDEICOMISO INMOBILIARIO BLACK, Clave Única de Identificación Tributaria 30-71866388-8, constituido el día el 5 de marzo de 2024.</p>
 <p class="dh4">1.- OBJETO:</p>
-<p>El Comprador ofrece de manera irrevocable a FIDEICOMISO INMOBILIARIO BLACK (“la Vendedora”), ${objeto} <b>“BLACK Paseo de Compras”</b> ubicado en la calle Santa Teresa N°2560 entre San Miguel e Islandia; designado según su título como Lote 2 de la fracción H, Nomenclatura catastral: Circunscripción XII, Sección R, Quinta 5, Parcela 7, Partida Inmobiliaria: 118- 039020-1, Matricula 7423 de Escobar, provincia de Buenos Aires.</p>
+<p>${G.Art} ${G.sust} ${vb("ofrece","ofrecen")} de manera irrevocable a FIDEICOMISO INMOBILIARIO BLACK (“la Vendedora”), ${objeto} <b>“BLACK Paseo de Compras”</b> ubicado en la calle Santa Teresa N°2560 entre San Miguel e Islandia; designado según su título como Lote 2 de la fracción H, Nomenclatura catastral: Circunscripción XII, Sección R, Quinta 5, Parcela 7, Partida Inmobiliaria: 118- 039020-1, Matricula 7423 de Escobar, provincia de Buenos Aires.</p>
 <p class="dh4">2.- PRECIO. FORMA DE PAGO:</p>
-<p>2.1. La Compradora ofrece adquirir ${sujeto} por un Precio de DÓLARES ESTADOUNIDENSES ${R.precio?enLetras(R.precio):"____"} (${R.precio?uss(R.precio):"U$S____"}).</p>
+<p>2.1. ${G.Art} ${G.sust} ${vb("ofrece","ofrecen")} adquirir ${sujeto} por un Precio de DÓLARES ESTADOUNIDENSES ${R.precio?enLetras(R.precio):"____"} (${R.precio?uss(R.precio):"U$S____"}).</p>
 <p>2.2. Forma de Pago: ${pago}</p>
 <p class="dh4">3.- SUSCRIPCIÓN DEL BOLETO DE COMPRAVENTA:</p>
-<p>La firma del Boleto de Compraventa será antes de los ${R.dias||"__"} días de conformada la reserva. La Inmobiliaria (o la Vendedora) comunicarán a la Compradora al Domicilio Electrónico constituido en este acto, el día y la hora en que deberá concurrir a la Sucursal del Banco Macro Nordelta, Tigre, Provincia de Buenos Aires, a fin de suscribir el Boleto de Compraventa, debiendo abonar en dicho momento los importes pactados según la forma de pago elegida.</p>
+<p>La firma del Boleto de Compraventa será antes de los ${R.dias||"__"} días de conformada la reserva. La Inmobiliaria (o la Vendedora) comunicarán a ${G.art} ${G.sust} al Domicilio Electrónico constituido en este acto, el día y la hora en que ${vb("deberá","deberán")} concurrir a la Sucursal del Banco Macro Nordelta, Tigre, Provincia de Buenos Aires, a fin de suscribir el Boleto de Compraventa, debiendo abonar en dicho momento los importes pactados según la forma de pago elegida.</p>
 </section>
 <section class="dpag">${cab}
 <p class="dh4">4.- ESCRITURA:</p>
-<p>La escritura traslativa de dominio de la unidad privativa se otorgará por ante el escribano Christian José MANZELLA, Registro 41 del Partido de Vicente López, con domicilio en la Avenida Guillermo Rawson número 3415, de La Lucila, Partido de Vicente López, Provincia de Buenos Aires, Teléfono 7078-8800, correo electrónico: cjm@escribaniamanzella.com, tendrá lugar una vez cancelada la totalidad del Precio acordado, finalizadas las obras proyectadas, en base a títulos perfectos y libre de todo gravamen una vez aprobado el trámite de inscripción del plano de Propiedad Horizontal. Los gastos de escrituración, impuestos y honorarios serán soportados en su totalidad por la Compradora, al igual que el uno por ciento (1%) del precio de venta de la Unidad Funcional en concepto de “Fondo Operativo o de Caja”, y el uno por ciento (1%) del precio de venta en concepto de “Fondo de Equipamiento”.</p>
+<p>La escritura traslativa de dominio de la unidad privativa se otorgará por ante el escribano Christian José MANZELLA, Registro 41 del Partido de Vicente López, con domicilio en la Avenida Guillermo Rawson número 3415, de La Lucila, Partido de Vicente López, Provincia de Buenos Aires, Teléfono 7078-8800, correo electrónico: cjm@escribaniamanzella.com, tendrá lugar una vez cancelada la totalidad del Precio acordado, finalizadas las obras proyectadas, en base a títulos perfectos y libre de todo gravamen una vez aprobado el trámite de inscripción del plano de Propiedad Horizontal. Los gastos de escrituración, impuestos y honorarios serán soportados en su totalidad por ${G.art} ${G.sust}, al igual que el uno por ciento (1%) del precio de venta de la Unidad Funcional en concepto de “Fondo Operativo o de Caja”, y el uno por ciento (1%) del precio de venta en concepto de “Fondo de Equipamiento”.</p>
 <p class="dh4">5.- INCUMPLIMIENTOS:</p>
-<p>5.1. Si la Compradora no concurriera a celebrar el Boleto de Compraventa en el lugar, día y hora fijada para la celebración del mismo, incurrirá en incumplimiento, en cuyo caso perderá la suma abonada en este acto como Reserva, en concepto penalidad única, total y definitiva, comprensiva de cualquier daño que pudiere invocar la Vendedora.</p>
-<p>5.2. Si fuera la Vendedora quien no concurriera a celebrar el Boleto de Compraventa en el lugar, día y hora fijada para la celebración del mismo, incurrirá en incumplimiento, en cuyo caso la Inmobiliaria interviniente deberá reintegrar la suma entregada en este acto como Reserva, con una suma igual en concepto penalidad única, total y definitiva, comprensiva de cualquier daño que pudiere invocar la Compradora.</p>
-<p><b>6. - HONORARIOS:</b> Al momento de la firma del Contrato de Incorporación al Fideicomiso, el Ofertante abonará a la Martillera interviniente la suma equivalente al ${num(R.honorarios,2)}% más IVA del total del precio acordado, en concepto de honorarios.${R.comparte?` Participa en esta Operación la Martillera ${esc(R.comparte)}.`:""}</p>
+<p>5.1. Si ${G.art} ${G.sust} no ${vb("concurriera","concurrieran")} a celebrar el Boleto de Compraventa en el lugar, día y hora fijada para la celebración del mismo, ${vb("incurrirá","incurrirán")} en incumplimiento, en cuyo caso ${vb("perderá","perderán")} la suma abonada en este acto como Reserva, en concepto penalidad única, total y definitiva, comprensiva de cualquier daño que pudiere invocar la Vendedora.</p>
+<p>5.2. Si fuera la Vendedora quien no concurriera a celebrar el Boleto de Compraventa en el lugar, día y hora fijada para la celebración del mismo, incurrirá en incumplimiento, en cuyo caso la Inmobiliaria interviniente deberá reintegrar la suma entregada en este acto como Reserva, con una suma igual en concepto penalidad única, total y definitiva, comprensiva de cualquier daño que ${vb("pudiere","pudieren")} invocar ${G.art} ${G.sust}.</p>
+<p><b>6. - HONORARIOS:</b> Al momento de la firma del Contrato de Incorporación al Fideicomiso, ${G.art} ${G.ofer} ${vb("abonará","abonarán")} a la Martillera interviniente la suma equivalente al ${num(R.honorarios,2)}% más IVA del total del precio acordado, en concepto de honorarios.${R.comparte?` Participa en esta Operación la Martillera ${esc(R.comparte)}.`:""}</p>
 <p>En prueba de conformidad, se firman tres (3) ejemplares, de un mismo tenor y al mismo efecto, ${fechaTxt}.</p>
-<table class="dfirmas"><tr><td><div class="dlin"></div>COLDWELL BANKER</td><td><div class="dlin"></div>OFERTANTE${R.nombre?`<div class="dacl">${esc(R.nombre)}</div>`:""}</td></tr></table>
+<table class="dfirmas">${[{t:"COLDWELL BANKER"},...cs.map(c=>({t:"OFERTANTE",n:c.nombre}))].reduce((filas,f,i)=>{ if(i%2===0) filas.push([]); filas[filas.length-1].push(f); return filas; },[]).map(fila=>`<tr>${fila.map(f=>`<td><div class="dlin"></div>${f.t}${f.n?`<div class="dacl">${esc(f.n)}</div>`:""}</td>`).join("")}${fila.length<2?"<td></td>":""}</tr>`).join("")}</table>
 </section>
 <section class="dpag">${cab}
 <h2 class="dtit">ACEPTACIÓN DE RESERVA.</h2>
@@ -657,6 +669,7 @@ const DOC_CSS = `
 .dh{background:#ffe1dc;color:#9a2a1f}
 .dfirmas{width:100%;margin-top:60px;border-collapse:collapse}
 .dfirmas td{width:50%;text-align:center;vertical-align:top;padding:0 14px;font-size:10.5pt}
+.dfirmas tr+tr td{padding-top:55px}
 .dlin{border-top:1px solid #111;margin:0 auto 6px;width:80%}
 .dacl{font-size:9.5pt;color:#444;margin-top:2px}
 .dacep{margin-top:70px}
@@ -687,12 +700,10 @@ function generadorReserva(base){
       <input id="g-buscar" placeholder="Filtrar: A3, B2, nave 4…" ${soloDoc?"hidden":""}>
       <div class="lista-locs" id="g-locs">${cand.map(l=>`<label data-q="${esc((l.codigo+" "+l.planta+" nave "+l.nave).toLowerCase())}"><input type="checkbox" value="${esc(l.id)}" ${sel.has(l.id)?"checked":""} ${soloDoc?"disabled":""}> <b>${esc(l.codigo)}</b> <span class="muted">${l.planta==="PB"?"PB":l.planta+"°"} N${esc(l.nave)} · ${num(l.m2,2)} m²</span><span class="pr">${usd(precioDe(l))}</span></label>`).join("")}</div>
     </fieldset>
-    <fieldset><legend>Comprador</legend>
-      <label for="g-nom">Nombre y apellido</label><input id="g-nom" value="${esc(base.cliente||r.cliente||"")}">
-      <div class="dos"><div><label for="g-tdoc">Documento</label><select id="g-tdoc">${["D.N.I.","C.U.I.T.","Pasaporte"].map(t=>`<option>${t}</option>`).join("")}</select></div><div><label for="g-doc">Número</label><input id="g-doc" inputmode="numeric" placeholder="18.155.356"></div></div>
-      <label for="g-ec">Estado civil</label><input id="g-ec" list="g-ecs" placeholder="casado"><datalist id="g-ecs"><option>soltero</option><option>soltera</option><option>casado</option><option>casada</option><option>divorciado</option><option>divorciada</option><option>viudo</option><option>viuda</option></datalist>
-      <label for="g-dom">Domicilio (calle, número, piso, localidad)</label><input id="g-dom" placeholder="Mendoza 5056 6°A CABA">
-      <div class="dos"><div><label for="g-mail">Email</label><input id="g-mail" type="email" value="${esc(/@/.test(base.contacto||r.contacto||"")?(base.contacto||r.contacto):"")}"></div><div><label for="g-tel">Teléfono</label><input id="g-tel" type="tel" value="${esc(/@/.test(base.contacto||r.contacto||"")?"":(base.contacto||r.contacto||""))}"></div></div>
+    <fieldset><legend>Compradores</legend>
+      <datalist id="g-ecs"><option>soltero</option><option>soltera</option><option>casado</option><option>casada</option><option>divorciado</option><option>divorciada</option><option>viudo</option><option>viuda</option></datalist>
+      <div id="g-comps"></div>
+      <button type="button" id="g-addc" style="margin-top:10px">+ Agregar otro comprador</button>
     </fieldset>
     <fieldset><legend>Montos (USD)</legend>
       <label for="g-monto">Monto de la reserva</label><input id="g-monto" type="number" step="500" value="${esc(r.sena||10000)}">
@@ -716,6 +727,23 @@ function generadorReserva(base){
     <p class="muted" style="font-size:12px">En el documento, lo amarillo sale de este panel y lo rojo falta completar. Al imprimir no se ven los colores.</p>
   </aside>
   <div class="gvista"><div id="g-doc-vista"></div></div></div>`;
+  const contactoIni=base.contacto||r.contacto||"";
+  const bloqueComprador=(c,i)=>`<div class="gcomp" data-i="${i}"><div class="gcomp-cab"><b>Comprador ${i+1}</b>${i?`<button type="button" class="c-quitar">Quitar</button>`:""}</div>
+      <div class="seg c-gen" role="group" aria-label="Género"><button type="button" data-g="m" aria-pressed="${c.genero!=="f"}">Sr.</button><button type="button" data-g="f" aria-pressed="${c.genero==="f"}">Sra.</button></div>
+      <label>Nombre y apellido</label><input class="c-nom" value="${esc(c.nombre||"")}">
+      <div class="dos"><div><label>Documento</label><select class="c-tdoc">${["D.N.I.","C.U.I.T.","Pasaporte"].map(t=>`<option ${c.tipoDoc===t?"selected":""}>${t}</option>`).join("")}</select></div><div><label>Número</label><input class="c-doc" inputmode="numeric" placeholder="18.155.356" value="${esc(c.doc||"")}"></div></div>
+      <label>Estado civil</label><input class="c-ec" list="g-ecs" placeholder="${c.genero==="f"?"casada":"casado"}" value="${esc(c.estadoCivil||"")}">
+      <label>Domicilio (calle, número, piso, localidad)</label><input class="c-dom" placeholder="Mendoza 5056 6°A CABA" value="${esc(c.domicilio||"")}">
+      <div class="dos"><div><label>Email</label><input class="c-mail" type="email" value="${esc(c.email||"")}"></div><div><label>Teléfono</label><input class="c-tel" type="tel" value="${esc(c.tel||"")}"></div></div></div>`;
+  let compradores=[{genero:"m",nombre:base.cliente||r.cliente||"",tipoDoc:"D.N.I.",email:/@/.test(contactoIni)?contactoIni.split(" · ").find(x=>/@/.test(x)):"",tel:contactoIni.split(" · ").find(x=>x&&!/@/.test(x))||""}];
+  const leerComps=()=>[...g.querySelectorAll(".gcomp")].map(b=>({genero:b.querySelector('.c-gen [aria-pressed="true"]').dataset.g,nombre:b.querySelector(".c-nom").value.trim(),tipoDoc:b.querySelector(".c-tdoc").value,doc:b.querySelector(".c-doc").value.trim(),estadoCivil:b.querySelector(".c-ec").value.trim(),domicilio:b.querySelector(".c-dom").value.trim(),email:b.querySelector(".c-mail").value.trim(),tel:b.querySelector(".c-tel").value.trim()}));
+  const pintarComps=()=>{ $("#g-comps").innerHTML=compradores.map(bloqueComprador).join(""); $("#g-addc").hidden=compradores.length>=4; };
+  pintarComps();
+  $("#g-addc").onclick=()=>{ compradores=leerComps(); compradores.push({genero:"m",tipoDoc:"D.N.I."}); pintarComps(); pintar(); g.querySelector(`.gcomp[data-i="${compradores.length-1}"] .c-nom`).focus(); };
+  $("#g-comps").addEventListener("click",e=>{
+    const q=e.target.closest(".c-quitar"); if(q){ compradores=leerComps(); compradores.splice(+q.closest(".gcomp").dataset.i,1); pintarComps(); pintar(); return; }
+    const gb=e.target.closest(".c-gen button"); if(gb){ gb.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===gb))); pintar(); }
+  });
   let precioTocado=false, antTocado=false;
   const leer=()=>{
     const ids=[...g.querySelectorAll("#g-locs input:checked")].map(i=>i.value);
@@ -728,8 +756,8 @@ function generadorReserva(base){
     $("#g-lista").textContent=lista?`Precio de lista: ${usd(lista)}${precio&&precio!==lista?` · diferencia ${usd(precio-lista)}`:""}`:"";
     $("#g-saldo").textContent=precio?`Saldo ${usd(saldo)}${cuotas&&saldo?` en ${cuotas} cuotas de ${usd(saldo/cuotas)}`:""}`:"Elegí al menos un local.";
     const C={nombre:$("#g-cnom").value.trim(),matricula:$("#g-cmat").value.trim(),sistema:$("#g-csis").value.trim(),domicilio:$("#g-cdom").value.trim()};
-    return {ids,locales,precio,anticipo,cuotas,monto:+$("#g-monto").value||0,nombre:$("#g-nom").value.trim(),tipoDoc:$("#g-tdoc").value,doc:$("#g-doc").value.trim(),
-      estadoCivil:$("#g-ec").value.trim(),domicilio:$("#g-dom").value.trim(),email:$("#g-mail").value.trim(),tel:$("#g-tel").value.trim(),
+    const comps=leerComps();
+    return {ids,locales,precio,anticipo,cuotas,monto:+$("#g-monto").value||0,compradores:comps,nombre:comps.map(c=>c.nombre).filter(Boolean).join(" y "),
       dias:+$("#g-dias").value||0,honorarios:+$("#g-hon").value||0,comparte:$("#g-comp").value.trim(),fecha:$("#g-fecha").value,corredor:C};
   };
   const pintar=()=>{ const R=leer(); $("#g-doc-vista").innerHTML=docReservaHTML(R); };
@@ -740,7 +768,7 @@ function generadorReserva(base){
   const buscar=$("#g-buscar"); if(buscar) buscar.addEventListener("input",e=>{ const q=e.target.value.toLowerCase().trim(); g.querySelectorAll("#g-locs label").forEach(l=>l.hidden=q&&!l.dataset.q.includes(q)); });
   pintar();
   $("#g-x").onclick=cerrarGenerador;
-  const falta=R=>{ if(!R.locales.length) return "Elegí al menos un local."; if(!R.nombre) return "Falta el nombre del comprador."; if(!R.monto) return "Falta el monto de la reserva."; if(!R.precio) return "Falta el precio."; return ""; };
+  const falta=R=>{ if(!R.locales.length) return "Elegí al menos un local."; if(R.compradores.some(c=>!c.nombre)) return "Falta el nombre de un comprador."; if(!R.monto) return "Falta el monto de la reserva."; if(!R.precio) return "Falta el precio."; return ""; };
   const nombreArchivo=R=>`Reserva ${R.locales.map(l=>l.codigo).join("-")} ${R.nombre}`.replace(/[\\/:*?"<>|]/g,"").trim();
   $("#g-imp").onclick=()=>{ const R=leer(); const w=window.open("","_blank"); if(!w){toast("El navegador bloqueó la ventana. Permití ventanas emergentes.");return;} w.document.write(documentoReserva(R)); w.document.close(); setTimeout(()=>{ try{w.print();}catch(e){} },900); };
   $("#g-pdf").onclick=async e=>{ const R=leer(); const m=falta(R); if(m){toast(m);return;} const b=e.target; b.disabled=true; b.textContent="Generando PDF…";
@@ -750,8 +778,9 @@ function generadorReserva(base){
   const reg=$("#g-reg"); if(reg) reg.onclick=async e=>{
     const R=leer(); const m=falta(R); if(m){toast(m);return;}
     const ocup=R.locales.filter(l=>l.estado!=="disponible"); if(ocup.length){ toast(`Ya no está disponible: ${ocup.map(l=>l.codigo).join(", ")}`); return; }
-    const notas=[`${R.tipoDoc} ${R.doc}`.trim(), R.estadoCivil&&("estado civil "+R.estadoCivil), R.domicilio&&("domicilio "+R.domicilio), `precio ofrecido ${usd(R.precio)}`, `anticipo ${usd(R.anticipo)}`, R.cuotas?`${R.cuotas} cuotas`:"", `boleto en ${R.dias} días`, `honorarios ${R.honorarios}% + IVA`].filter(x=>x&&x!=="D.N.I.").join(" · ");
-    const d={cliente:R.nombre,contacto:[R.tel,R.email].filter(Boolean).join(" · "),fecha:R.fecha,sena:R.monto,vence:masDias(R.fecha||hoyISO(),R.dias||10),notas};
+    const notas=[...R.compradores.map(c=>[c.nombre, c.doc&&`${c.tipoDoc} ${c.doc}`, c.estadoCivil, c.domicilio&&("domicilio "+c.domicilio), c.email, c.tel].filter(Boolean).join(", ")), `precio ofrecido ${usd(R.precio)}`, `anticipo ${usd(R.anticipo)}`, R.cuotas?`${R.cuotas} cuotas`:"", `boleto en ${R.dias} días`, `honorarios ${R.honorarios}% + IVA`].filter(x=>x&&x!=="D.N.I.").join(" · ");
+    const c1=R.compradores[0]||{};
+    const d={cliente:R.nombre,contacto:[c1.tel,c1.email].filter(Boolean).join(" · "),fecha:R.fecha,sena:R.monto,vence:masDias(R.fecha||hoyISO(),R.dias||10),notas};
     if(await guardar("reservar",[R.ids,d,presu?presu.id:null],R.ids.length>1?`${R.ids.length} locales reservados`:"Reserva registrada",e.target)){
       e.target.hidden=true; toast("Reserva registrada. Ahora podés imprimir o guardar el PDF.");
     }
