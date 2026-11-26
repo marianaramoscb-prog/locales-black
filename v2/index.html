@@ -260,7 +260,7 @@ a.btn{text-decoration:none;display:inline-block}
   <div class="resumen" id="resumen"></div>
 
   <section class="vista" id="v-proyectos">
-    <div class="barra"><h2>Proyectos</h2><label class="chk-in"><input type="checkbox" id="ver-archivados"> Ver archivados</label><button class="prim" id="btn-nuevo-proy" hidden>Nuevo proyecto</button></div>
+    <div class="barra"><h2>Proyectos</h2><label class="chk-in"><input type="checkbox" id="ver-archivados"> Ver archivados</label><button id="btn-admin" hidden>Administración</button><button class="prim" id="btn-nuevo-proy" hidden>Nuevo proyecto</button></div>
     <div class="pgrid" id="proy-lista"><div class="vacio">Cargando proyectos…</div></div>
   </section>
 
@@ -676,6 +676,7 @@ function aplicarPermisos(){
   v('#btn-nuevo-presu', can("presupuestos_crear"));
   v('#btn-nueva-res', can("reservar"));
   v('#btn-nuevo-cli', can("clientes_cargar"));
+  v('#btn-admin', esAdmin());
 }
 
 /* ---------- proyectos y tipos ---------- */
@@ -706,15 +707,15 @@ function calcularPlantas(){
 const VISTAS = ["proyectos", "locales", "presupuestos", "reservas", "clientes", "cobranzas", "historial", "proyecto", "admin"];
 function ir(v, pid){
   if (pid !== undefined && pid !== S.pid) { S.pid = pid; S.fPlanta = "todas"; S.fEstado = "todos"; filtrarProyecto(); renderTodo(); }
-  if (v !== "proyectos" && !S.pid) v = "proyectos";
+  if (v !== "proyectos" && v !== "admin" && !S.pid) v = "proyectos";
   const salia = S.vista === "admin" && v !== "admin"; S.vista = v; if (salia && S.pendRef) { S.pendRef = false; cargar(); }
   VISTAS.forEach(x => { $("#v-" + x).hidden = x !== v; const b = document.querySelector(`nav.tabs button[data-v="${x}"]`); if (b) { if (x === v) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); } });
   aplicarPermisos();
-  const enProy = v !== "proyectos";
-  $("nav.tabs").hidden = !enProy; $("#volver").hidden = !enProy; $("#resumen").hidden = !enProy || !["locales", "presupuestos", "reservas"].includes(v);
+  const enProy = !!S.pid && v !== "proyectos";
+  $("nav.tabs").hidden = !enProy; $("#volver").hidden = v === "proyectos"; $("#resumen").hidden = !enProy || !["locales", "presupuestos", "reservas"].includes(v);
   const p = P();
-  $("#tit").textContent = enProy && p ? p.nombre : "Gestor de desarrollos";
-  $("#sub").textContent = enProy && p ? [TIPOS_PROY[p.tipo], p.localidad].filter(Boolean).join(" · ") : "Coldwell Banker";
+  $("#tit").textContent = enProy && p ? p.nombre : (v === "admin" ? "Administración" : "Gestor de desarrollos");
+  $("#sub").textContent = enProy && p ? [TIPOS_PROY[p.tipo], p.localidad].filter(Boolean).join(" · ") : (v === "admin" ? "Cuentas, perfiles y accesos" : "Coldwell Banker");
   document.querySelector('nav.tabs button[data-v="locales"]').textContent = plural(unidadLbl());
   if (v === "proyecto") renderProyectoTab();
   if (v === "proyectos") renderProyectos();
@@ -754,6 +755,7 @@ function renderProyectos(){
 }
 $("#proy-lista").addEventListener("click", e => { const b = e.target.closest(".pcard"); if (b) ir("locales", b.dataset.pid); });
 $("#btn-nuevo-proy").onclick = () => editorProyecto(null);
+$("#btn-admin").onclick = () => ir("admin");
 $("#ver-archivados").onchange = e => { S.verArchivados = e.target.checked; renderProyectos(); };
 
 /* ---------- resumen del proyecto ---------- */
