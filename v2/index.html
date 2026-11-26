@@ -818,8 +818,25 @@ function abrirDrawer(html, ancho){ const d = $("#drawer"); d.style.width = ancho
 function cerrarDrawer(){ $("#drawer").hidden = true; $("#velo").hidden = true; S.fichaAbierta = null; S.clienteAbierto = null; }
 $("#velo").addEventListener("click", cerrarDrawer);
 addEventListener("keydown", e => { if (e.key === "Escape") cerrarDrawer(); });
+/* grupos (plantas/torres/etapas) válidos: los del tipo de proyecto + los que ya tienen unidades */
+function gruposUnidad(){
+  const keys = Object.keys(NIV().nombres || {});
+  Object.values(S.locales).forEach(l => { if (!keys.includes(l.planta)) keys.push(l.planta); });
+  return keys.sort((a, b) => a === "PB" ? -1 : b === "PB" ? 1 : cmpNat(a, b));
+}
+function opcionesGrupo(actual){
+  const keys = gruposUnidad(), fuera = !keys.includes(actual);
+  return keys.map(k => `<option value="${esc(k)}" ${k === actual ? "selected" : ""}>${esc(nombreGrupo(k))}</option>`).join("")
+    + `<option value="__nuevo" ${fuera ? "selected" : ""}>+ Otro grupo…</option>`;
+}
+function grupoElegido(){
+  if ($("#d-grupo").value !== "__nuevo") return $("#d-grupo").value;
+  const t = $("#d-grupo-nuevo").value.trim().replace(/\s+/g, " ");
+  const e = Object.entries(NIV().nombres || {}).find(([k, n]) => n.toLowerCase() === t.toLowerCase());
+  return e ? e[0] : t;
+}
 function abrirLocal(id){
-  const nueva = !id; const l = nueva ? { codigo: "", planta: PLANTAS[0] ? PLANTAS[0].k : "", nave: "", m2: "", usdM2: null, precioLista: null, estado: "disponible", cliente: "", rubro: "", notas: "" } : S.locales[id];
+  const nueva = !id; const l = nueva ? { codigo: "", planta: gruposUnidad()[0] ?? "", nave: "", m2: "", usdM2: null, precioLista: null, estado: "disponible", cliente: "", rubro: "", notas: "" } : S.locales[id];
   if (!l) return;
   const tipo = (P() || {}).tipo || "otro"; const N = NIV(); const U = unidadLbl();
   const presus = nueva ? [] : S.presus.filter(p => (p.items || []).some(i => i.id === id));
@@ -827,7 +844,7 @@ function abrirLocal(id){
   const hist = nueva ? [] : S.hist.filter(h => h.localId === l.id).slice(0, 8);
   const campo = k => { const [lab, , t] = CAMPO[k]; const v = l[k] ?? ""; return `<div><label for="d-${k}">${lab}</label><input id="d-${k}" ${t === "txt" ? "" : `type="number" step="${t === "int" ? 1 : 0.01}"`} value="${esc(v)}"></div>`; };
   abrirDrawer(`<div class="cab"><div><h3>${nueva ? "Nuevo " + esc(U.toLowerCase()) : esc(U) + " " + esc(l.codigo)}</h3><div class="muted">${nueva ? esc(P().nombre) : esc(ubicTxt(l))}</div></div><button id="d-x">Cerrar</button></div>
-   <div class="tres"><div><label for="d-codigo">Código</label><input id="d-codigo" value="${esc(l.codigo)}"></div><div><label for="d-grupo">${esc(N.grupo)}</label><input id="d-grupo" value="${esc(l.planta)}" list="d-grupos"><datalist id="d-grupos">${PLANTAS.map(p => `<option value="${esc(p.k)}">`).join("")}</datalist></div><div><label for="d-sub">${esc(N.subgrupo)}</label><input id="d-sub" value="${esc(l.nave ?? "")}"></div></div>
+   <div class="tres"><div><label for="d-codigo">Código</label><input id="d-codigo" value="${esc(l.codigo)}"></div><div><label for="d-grupo">${esc(N.grupo)}</label><select id="d-grupo">${opcionesGrupo(l.planta)}</select><input id="d-grupo-nuevo" placeholder="Código del nuevo ${esc(N.grupo.toLowerCase())}" value="${esc(gruposUnidad().includes(l.planta) ? "" : l.planta)}" style="margin-top:6px" ${gruposUnidad().includes(l.planta) ? "hidden" : ""}></div><div><label for="d-sub">${esc(N.subgrupo)}</label><input id="d-sub" value="${esc(l.nave ?? "")}"></div></div>
    <div class="tres"><div><label for="d-m2">${tipo === "barrio" ? "Superficie m²" : "Sup. total m²"}</label><input id="d-m2" type="number" step="0.01" value="${esc(l.m2)}"></div><div><label for="d-usd">USD por m²</label><input id="d-usd" type="number" step="50" value="${esc(l.usdM2 ?? "")}"></div><div><label for="d-pl">Precio fijo USD</label><input id="d-pl" type="number" step="1000" value="${esc(l.precioLista ?? "")}" placeholder="opcional"></div></div>
    <div class="muted" style="font-size:12px;margin-top:4px">Precio: <b id="d-precio">${usd(precioDe(l))}</b> · si cargás precio fijo, se usa ese en lugar de m² × USD/m².</div>
    <div class="tres">${(CAMPOS_TIPO[tipo] || []).map(campo).join("")}</div>
@@ -842,9 +859,10 @@ function abrirLocal(id){
   const upd = () => { const pl = +$("#d-pl").value; const v = pl || (+$("#d-m2").value) * (+$("#d-usd").value); $("#d-precio").textContent = v ? usd(v) : "—"; };
   ["#d-m2", "#d-usd", "#d-pl"].forEach(s => $(s).oninput = upd);
   $("#d-x").onclick = cerrarDrawer;
+  $("#d-grupo").onchange = () => { $("#d-grupo-nuevo").hidden = $("#d-grupo").value !== "__nuevo"; };
   $("#d-guardar").onclick = async e => {
     const val = s => $(s).value.trim();
-    const c = { codigo: val("#d-codigo"), grupo: val("#d-grupo"), subgrupo: val("#d-sub"), m2: val("#d-m2"), usd_m2: val("#d-usd"), precio_lista: val("#d-pl"), estado: $("#d-estado").value, cliente: val("#d-cliente"), notas: val("#d-notas") };
+    const c = { codigo: val("#d-codigo"), grupo: grupoElegido(), subgrupo: val("#d-sub"), m2: val("#d-m2"), usd_m2: val("#d-usd"), precio_lista: val("#d-pl"), estado: $("#d-estado").value, cliente: val("#d-cliente"), notas: val("#d-notas") };
     (CAMPOS_TIPO[tipo] || []).forEach(k => c[CAMPO[k][1]] = val("#d-" + k));
     if (!c.codigo) { toast("Poné el código"); return; }
     if (nueva) {
